@@ -8,9 +8,10 @@ class TokenType(Enum):
     NUMBER     = auto()
     ASSIGN     = auto()
     PLUS       = auto()
-    STAR       = auto()  # ADDED: Multiplication
+    STAR       = auto()
     LPAREN     = auto()
     RPAREN     = auto()
+    COMMA      = auto()  # ADDED: Comma for function arguments
     NEWLINE    = auto()
     EOF        = auto()
 
@@ -30,9 +31,10 @@ class Lexer:
         ('IDENTIFIER', r'[a-zA-Z_]\w*'),
         ('ASSIGN',     r'='),
         ('PLUS',       r'\+'),
-        ('STAR',       r'\*'),  # ADDED: Multiplication rule
+        ('STAR',       r'\*'),
         ('LPAREN',     r'\('),
         ('RPAREN',     r'\)'),
+        ('COMMA',      r','),   # ADDED: Comma rule
         ('NEWLINE',    r'\n'),
         ('SKIP',       r'[ \t]+'),
         ('MISMATCH',   r'.'),

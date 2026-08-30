@@ -1,6 +1,6 @@
 from typing import List
 from pylite.lexer import Token, TokenType
-from pylite.ast import ASTNode, Number, Name, BinOp, Assign
+from pylite.ast import ASTNode, Number, Name, BinOp, Assign, Call
 
 class Parser:
     def __init__(self, tokens: List[Token]):
@@ -13,7 +13,6 @@ class Parser:
         return self.tokens[-1]
 
     def eat(self, token_type: TokenType):
-        """Consume the current token if it matches the expected type, otherwise error."""
         if self.current_token().type == token_type:
             self.pos += 1
         else:
@@ -23,7 +22,6 @@ class Parser:
             )
 
     def parse(self) -> List[ASTNode]:
-        """Parse the entire token list into a list of statements."""
         statements = []
         while self.current_token().type != TokenType.EOF:
             if self.current_token().type == TokenType.NEWLINE:
@@ -33,8 +31,6 @@ class Parser:
         return statements
 
     def statement(self) -> ASTNode:
-        """statement -> assignment | expr"""
-        # Lookahead: if we see IDENTIFIER followed by ASSIGN, it's an assignment
         if self.current_token().type == TokenType.IDENTIFIER:
             next_pos = self.pos + 1
             if next_pos < len(self.tokens) and self.tokens[next_pos].type == TokenType.ASSIGN:
@@ -44,11 +40,9 @@ class Parser:
                 value = self.expr()
                 return Assign(name=name, value=value)
         
-        # Otherwise, treat it as an expression
         return self.expr()
 
     def expr(self) -> ASTNode:
-        """expr -> term (PLUS term)*"""
         node = self.term()
         while self.current_token().type == TokenType.PLUS:
             self.eat(TokenType.PLUS)
@@ -56,7 +50,6 @@ class Parser:
         return node
 
     def term(self) -> ASTNode:
-        """term -> factor (STAR factor)*"""
         node = self.factor()
         while self.current_token().type == TokenType.STAR:
             self.eat(TokenType.STAR)
@@ -64,7 +57,6 @@ class Parser:
         return node
 
     def factor(self) -> ASTNode:
-        """factor -> NUMBER | IDENTIFIER | LPAREN expr RPAREN"""
         token = self.current_token()
         
         if token.type == TokenType.NUMBER:
@@ -73,7 +65,21 @@ class Parser:
         
         elif token.type == TokenType.IDENTIFIER:
             self.eat(TokenType.IDENTIFIER)
-            return Name(value=token.value)
+            name_node = Name(value=token.value)
+            
+            # ADDED: Check if it's a function call (e.g., print(...))
+            if self.current_token().type == TokenType.LPAREN:
+                self.eat(TokenType.LPAREN)
+                args = []
+                if self.current_token().type != TokenType.RPAREN:
+                    args.append(self.expr())
+                    while self.current_token().type == TokenType.COMMA:
+                        self.eat(TokenType.COMMA)
+                        args.append(self.expr())
+                self.eat(TokenType.RPAREN)
+                return Call(func=name_node, args=args)
+                
+            return name_node
         
         elif token.type == TokenType.LPAREN:
             self.eat(TokenType.LPAREN)

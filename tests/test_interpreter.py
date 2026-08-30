@@ -41,3 +41,19 @@ def test_interpreter_undefined_variable():
         assert False, "Should have raised a NameError"
     except NameError as e:
         assert "name 'x' is not defined" in str(e)
+
+def test_interpreter_print_function(capsys):
+    code = """
+x = 10
+print(x, x * 2)
+"""
+    lexer = Lexer(code)
+    parser = Parser(lexer.tokenize())
+    ast = parser.parse()
+    
+    interpreter = Interpreter()
+    interpreter.interpret(ast)
+    
+    # Capture the output printed to the console
+    captured = capsys.readouterr()
+    assert captured.out == "10 20\n"

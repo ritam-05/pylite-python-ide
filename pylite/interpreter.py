@@ -1,13 +1,14 @@
 from typing import Any, Dict, List
-from pylite.ast import ASTNode, Number, Name, BinOp, Assign
+from pylite.ast import ASTNode, Number, Name, BinOp, Assign, Call
 
 class Interpreter:
     def __init__(self):
-        # The environment is our memory. It stores variables and their values.
-        self.environment: Dict[str, Any] = {}
+        # ADDED: Inject 'print' into the environment natively
+        self.environment: Dict[str, Any] = {
+            "print": print
+        }
 
     def visit(self, node: ASTNode) -> Any:
-        """Dispatch to the correct visitor method based on the node's type."""
         if isinstance(node, Number):
             return self.visit_Number(node)
         elif isinstance(node, Name):
@@ -16,6 +17,8 @@ class Interpreter:
             return self.visit_BinOp(node)
         elif isinstance(node, Assign):
             return self.visit_Assign(node)
+        elif isinstance(node, Call):       # ADDED
+            return self.visit_Call(node)   # ADDED
         else:
             raise Exception(f"No visit method for {type(node).__name__}")
 
@@ -29,11 +32,9 @@ class Interpreter:
         return self.environment[name]
 
     def visit_BinOp(self, node: BinOp) -> Any:
-        # Evaluate the left and right sides of the tree first
         left = self.visit(node.left)
         right = self.visit(node.right)
 
-        # Then apply the operation
         if node.op == '+':
             return left + right
         elif node.op == '*':
@@ -42,13 +43,24 @@ class Interpreter:
             raise Exception(f"Unknown operator: {node.op}")
 
     def visit_Assign(self, node: Assign) -> None:
-        # Evaluate the right side (the value)
         value = self.visit(node.value)
-        # Store it in memory
         self.environment[node.name] = value
 
+    # ADDED: Execute a function call
+    def visit_Call(self, node: Call) -> Any:
+        # 1. Evaluate the function name (e.g., gets the actual Python print function)
+        func = self.visit(node.func)
+        
+        # 2. Evaluate all arguments
+        args = [self.visit(arg) for arg in node.args]
+        
+        # 3. Call the function with those arguments
+        if callable(func):
+            return func(*args)
+        else:
+            raise TypeError(f"'{type(func).__name__}' object is not callable")
+
     def interpret(self, statements: List[ASTNode]) -> Any:
-        """Execute a list of statements and return the result of the last one."""
         result = None
         for statement in statements:
             result = self.visit(statement)

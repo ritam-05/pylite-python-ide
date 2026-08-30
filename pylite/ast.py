@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 
 class ASTNode:
     """Base class for all AST nodes."""
@@ -22,3 +23,9 @@ class BinOp(ASTNode):
 class Assign(ASTNode):
     name: str
     value: ASTNode
+
+# ADDED: Represents a function call like print(x)
+@dataclass
+class Call(ASTNode):
+    func: ASTNode
+    args: List[ASTNode]
