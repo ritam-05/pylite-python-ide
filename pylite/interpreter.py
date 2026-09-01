@@ -1,5 +1,5 @@
 from typing import Any, Dict, List
-from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While
 
 class Interpreter:
     def __init__(self):
@@ -20,8 +20,10 @@ class Interpreter:
             return self.visit_Assign(node)
         elif isinstance(node, Call):
             return self.visit_Call(node)
-        elif isinstance(node, If):         # ADDED
-            return self.visit_If(node)     # ADDED
+        elif isinstance(node, If):
+            return self.visit_If(node)
+        elif isinstance(node, While):
+            return self.visit_While(node)
         else:
             raise Exception(f"No visit method for {type(node).__name__}")
 
@@ -42,6 +44,7 @@ class Interpreter:
         right = self.visit(node.right)
         
         if node.op == '+': return left + right
+        elif node.op == '-': return left - right     # ADDED
         elif node.op == '*': return left * right
         elif node.op == '==': return left == right
         elif node.op == '!=': return left != right
@@ -63,11 +66,13 @@ class Interpreter:
         else:
             raise TypeError(f"'{type(func).__name__}' object is not callable")
 
-    # ADDED: Handle the If block
     def visit_If(self, node: If) -> None:
-        condition_result = self.visit(node.condition)
-        
-        if condition_result:
+        if self.visit(node.condition):
+            for statement in node.body:
+                self.visit(statement)
+
+    def visit_While(self, node: While) -> None:
+        while self.visit(node.condition):
             for statement in node.body:
                 self.visit(statement)
 

@@ -35,4 +35,10 @@ class Call(ASTNode):
 @dataclass
 class If(ASTNode):
     condition: ASTNode
-    body: List[ASTNode]  # A block of statements to execute if True
+    body: List[ASTNode]
+
+# ADDED: Represents a while loop
+@dataclass
+class While(ASTNode):
+    condition: ASTNode
+    body: List[ASTNode]

@@ -1,6 +1,6 @@
 from typing import List
 from pylite.lexer import Token, TokenType
-from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While
 
 class Parser:
     def __init__(self, tokens: List[Token]):
@@ -28,20 +28,17 @@ class Parser:
         return statements
 
     def statement(self) -> ASTNode:
-        # ADDED: Parse IF statements
         if self.current_token().type == TokenType.IF:
             self.eat(TokenType.IF)
             condition = self.comparison()
             self.eat(TokenType.COLON)
             
-            # Consume newlines immediately following the colon
             while self.current_token().type == TokenType.NEWLINE:
                 self.eat(TokenType.NEWLINE)
                 
             self.eat(TokenType.INDENT)
             
             body = []
-            # Keep parsing statements until we hit a DEDENT or end of file
             while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
                 if self.current_token().type == TokenType.NEWLINE:
                     self.eat(TokenType.NEWLINE)
@@ -52,6 +49,28 @@ class Parser:
                 self.eat(TokenType.DEDENT)
                 
             return If(condition=condition, body=body)
+
+        if self.current_token().type == TokenType.WHILE:
+            self.eat(TokenType.WHILE)
+            condition = self.comparison()
+            self.eat(TokenType.COLON)
+            
+            while self.current_token().type == TokenType.NEWLINE:
+                self.eat(TokenType.NEWLINE)
+                
+            self.eat(TokenType.INDENT)
+            
+            body = []
+            while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
+                if self.current_token().type == TokenType.NEWLINE:
+                    self.eat(TokenType.NEWLINE)
+                    continue
+                body.append(self.statement())
+                
+            if self.current_token().type == TokenType.DEDENT:
+                self.eat(TokenType.DEDENT)
+                
+            return While(condition=condition, body=body)
 
         if self.current_token().type == TokenType.IDENTIFIER:
             next_pos = self.pos + 1
@@ -72,11 +91,13 @@ class Parser:
             node = BinOp(left=node, op=op_token.value, right=self.expr())
         return node
 
+    # ADDED: Now handles both PLUS and MINUS
     def expr(self) -> ASTNode:
         node = self.term()
-        while self.current_token().type == TokenType.PLUS:
-            self.eat(TokenType.PLUS)
-            node = BinOp(left=node, op='+', right=self.term())
+        while self.current_token().type in (TokenType.PLUS, TokenType.MINUS):
+            op_token = self.current_token()
+            self.eat(op_token.type)
+            node = BinOp(left=node, op=op_token.value, right=self.term())
         return node
 
     def term(self) -> ASTNode:

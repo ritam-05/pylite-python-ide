@@ -8,9 +8,11 @@ class TokenType(Enum):
     NUMBER     = auto()
     TRUE       = auto()
     FALSE      = auto()
-    IF         = auto()  # ADDED
+    IF         = auto()
+    WHILE      = auto()
     ASSIGN     = auto()
     PLUS       = auto()
+    MINUS      = auto()  # ADDED
     STAR       = auto()
     EQ         = auto()
     NEQ        = auto()
@@ -19,10 +21,10 @@ class TokenType(Enum):
     LPAREN     = auto()
     RPAREN     = auto()
     COMMA      = auto()
-    COLON      = auto()  # ADDED
+    COLON      = auto()
     NEWLINE    = auto()
-    INDENT     = auto()  # ADDED: Start of block
-    DEDENT     = auto()  # ADDED: End of block
+    INDENT     = auto()
+    DEDENT     = auto()
     EOF        = auto()
 
 @dataclass
@@ -36,7 +38,8 @@ class Lexer:
     KEYWORDS = {
         'True': TokenType.TRUE,
         'False': TokenType.FALSE,
-        'if': TokenType.IF        # ADDED
+        'if': TokenType.IF,
+        'while': TokenType.WHILE
     }
 
     RULES = [
@@ -48,13 +51,14 @@ class Lexer:
         ('GT',         r'>'),
         ('IDENTIFIER', r'[a-zA-Z_]\w*'),
         ('PLUS',       r'\+'),
+        ('MINUS',      r'-'),    # ADDED
         ('STAR',       r'\*'),
         ('LPAREN',     r'\('),
         ('RPAREN',     r'\)'),
         ('COMMA',      r','),
-        ('COLON',      r':'),     # ADDED
-        ('NEWLINE',    r'\r?\n[ \t]*'), # MODIFIED: Captures the newline AND leading spaces of the next line
-        ('SKIP',       r'[ \t]+'),      # Skips inline spaces
+        ('COLON',      r':'),
+        ('NEWLINE',    r'\r?\n[ \t]*'),
+        ('SKIP',       r'[ \t]+'),
         ('MISMATCH',   r'.'),
     ]
 
@@ -66,7 +70,7 @@ class Lexer:
         tokens = []
         line = 1
         line_start = 0
-        indent_stack = [0]  # Stack to track indentation levels
+        indent_stack = [0]
 
         for match in self.regex.finditer(self.source_code):
             kind = match.lastgroup
@@ -79,15 +83,13 @@ class Lexer:
                 raise SyntaxError(f"Unexpected character '{value}' at line {line}")
             
             elif kind == 'NEWLINE':
-                # Strip out the actual newline character to just get the spaces
                 spaces = value.replace('\r', '').replace('\n', '')
                 indent_level = len(spaces)
 
                 tokens.append(Token(TokenType.NEWLINE, "\n", line, column))
                 line += 1
-                line_start = match.end() - indent_level # Reset column calculation
+                line_start = match.end() - indent_level
 
-                # Determine INDENT or DEDENT
                 if indent_level > indent_stack[-1]:
                     indent_stack.append(indent_level)
                     tokens.append(Token(TokenType.INDENT, spaces, line, 0))
@@ -105,7 +107,6 @@ class Lexer:
                     token_type = TokenType[kind]
                 tokens.append(Token(token_type, value, line, column))
 
-        # At EOF, we must DEDENT back to zero
         while len(indent_stack) > 1:
             indent_stack.pop()
             tokens.append(Token(TokenType.DEDENT, "", line, 0))

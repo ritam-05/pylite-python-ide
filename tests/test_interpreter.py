@@ -93,3 +93,21 @@ if x < 5:
     
     captured = capsys.readouterr()
     assert captured.out == "1\n2\n"
+
+def test_interpreter_while_loop(capsys):
+    # A simple program to count down from 3 to 1
+    code = """
+x = 3
+while x > 0:
+    print(x)
+    x = x - 1
+"""
+    lexer = Lexer(code)
+    parser = Parser(lexer.tokenize())
+    ast = parser.parse()
+    
+    interpreter = Interpreter()
+    interpreter.interpret(ast)
+    
+    captured = capsys.readouterr()
+    assert captured.out == "3\n2\n1\n"
