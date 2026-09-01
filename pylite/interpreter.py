@@ -1,9 +1,8 @@
 from typing import Any, Dict, List
-from pylite.ast import ASTNode, Number, Name, BinOp, Assign, Call
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call
 
 class Interpreter:
     def __init__(self):
-        # ADDED: Inject 'print' into the environment natively
         self.environment: Dict[str, Any] = {
             "print": print
         }
@@ -11,18 +10,23 @@ class Interpreter:
     def visit(self, node: ASTNode) -> Any:
         if isinstance(node, Number):
             return self.visit_Number(node)
+        elif isinstance(node, Boolean):    # ADDED
+            return self.visit_Boolean(node)
         elif isinstance(node, Name):
             return self.visit_Name(node)
         elif isinstance(node, BinOp):
             return self.visit_BinOp(node)
         elif isinstance(node, Assign):
             return self.visit_Assign(node)
-        elif isinstance(node, Call):       # ADDED
-            return self.visit_Call(node)   # ADDED
+        elif isinstance(node, Call):
+            return self.visit_Call(node)
         else:
             raise Exception(f"No visit method for {type(node).__name__}")
 
     def visit_Number(self, node: Number) -> int:
+        return node.value
+
+    def visit_Boolean(self, node: Boolean) -> bool:
         return node.value
 
     def visit_Name(self, node: Name) -> Any:
@@ -35,10 +39,14 @@ class Interpreter:
         left = self.visit(node.left)
         right = self.visit(node.right)
 
-        if node.op == '+':
-            return left + right
-        elif node.op == '*':
-            return left * right
+        # Math
+        if node.op == '+': return left + right
+        elif node.op == '*': return left * right
+        # Comparisons (ADDED)
+        elif node.op == '==': return left == right
+        elif node.op == '!=': return left != right
+        elif node.op == '<': return left < right
+        elif node.op == '>': return left > right
         else:
             raise Exception(f"Unknown operator: {node.op}")
 
@@ -46,15 +54,10 @@ class Interpreter:
         value = self.visit(node.value)
         self.environment[node.name] = value
 
-    # ADDED: Execute a function call
     def visit_Call(self, node: Call) -> Any:
-        # 1. Evaluate the function name (e.g., gets the actual Python print function)
         func = self.visit(node.func)
-        
-        # 2. Evaluate all arguments
         args = [self.visit(arg) for arg in node.args]
         
-        # 3. Call the function with those arguments
         if callable(func):
             return func(*args)
         else:

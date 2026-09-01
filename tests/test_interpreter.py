@@ -10,11 +10,9 @@ def test_interpreter_math():
     interpreter = Interpreter()
     result = interpreter.interpret(ast)
     
-    # Precedence dictates 2*3 happens first (6), then + 4 = 10
     assert result == 10
 
 def test_interpreter_assignment_and_variables():
-    # A multiline script testing memory
     code = """
 x = 10
 y = x * 2 + 5
@@ -26,7 +24,6 @@ y = x * 2 + 5
     interpreter = Interpreter()
     interpreter.interpret(ast)
     
-    # Inspect the virtual memory (environment) to see if it worked
     assert interpreter.environment["x"] == 10
     assert interpreter.environment["y"] == 25
 
@@ -54,6 +51,25 @@ print(x, x * 2)
     interpreter = Interpreter()
     interpreter.interpret(ast)
     
-    # Capture the output printed to the console
     captured = capsys.readouterr()
     assert captured.out == "10 20\n"
+
+def test_interpreter_comparisons(capsys):
+    code = """
+x = 10
+y = 20
+print(x < y)
+print(x == 10)
+print(x != y)
+print(x + 15 > y)
+print(False)
+"""
+    lexer = Lexer(code)
+    parser = Parser(lexer.tokenize())
+    ast = parser.parse()
+    
+    interpreter = Interpreter()
+    interpreter.interpret(ast)
+    
+    captured = capsys.readouterr()
+    assert captured.out == "True\nTrue\nTrue\nTrue\nFalse\n"

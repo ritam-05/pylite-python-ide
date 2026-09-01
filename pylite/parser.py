@@ -1,6 +1,6 @@
 from typing import List
 from pylite.lexer import Token, TokenType
-from pylite.ast import ASTNode, Number, Name, BinOp, Assign, Call
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call
 
 class Parser:
     def __init__(self, tokens: List[Token]):
@@ -16,10 +16,7 @@ class Parser:
         if self.current_token().type == token_type:
             self.pos += 1
         else:
-            raise SyntaxError(
-                f"Expected {token_type.name}, got {self.current_token().type.name} "
-                f"at line {self.current_token().line}"
-            )
+            raise SyntaxError(f"Expected {token_type.name}, got {self.current_token().type.name}")
 
     def parse(self) -> List[ASTNode]:
         statements = []
@@ -37,10 +34,20 @@ class Parser:
                 name = self.current_token().value
                 self.eat(TokenType.IDENTIFIER)
                 self.eat(TokenType.ASSIGN)
-                value = self.expr()
+                value = self.comparison()  # Changed from expr to comparison
                 return Assign(name=name, value=value)
         
-        return self.expr()
+        return self.comparison()  # Changed from expr to comparison
+
+    # ADDED: Comparison logic (e.g. x < 10)
+    def comparison(self) -> ASTNode:
+        node = self.expr()
+        # If the next token is a comparison operator, eat it and build a BinOp
+        while self.current_token().type in (TokenType.EQ, TokenType.NEQ, TokenType.LT, TokenType.GT):
+            op_token = self.current_token()
+            self.eat(op_token.type)
+            node = BinOp(left=node, op=op_token.value, right=self.expr())
+        return node
 
     def expr(self) -> ASTNode:
         node = self.term()
@@ -62,20 +69,27 @@ class Parser:
         if token.type == TokenType.NUMBER:
             self.eat(TokenType.NUMBER)
             return Number(value=int(token.value))
+            
+        elif token.type == TokenType.TRUE:
+            self.eat(TokenType.TRUE)
+            return Boolean(value=True)
+            
+        elif token.type == TokenType.FALSE:
+            self.eat(TokenType.FALSE)
+            return Boolean(value=False)
         
         elif token.type == TokenType.IDENTIFIER:
             self.eat(TokenType.IDENTIFIER)
             name_node = Name(value=token.value)
             
-            # ADDED: Check if it's a function call (e.g., print(...))
             if self.current_token().type == TokenType.LPAREN:
                 self.eat(TokenType.LPAREN)
                 args = []
                 if self.current_token().type != TokenType.RPAREN:
-                    args.append(self.expr())
+                    args.append(self.comparison()) # arguments can be comparisons now!
                     while self.current_token().type == TokenType.COMMA:
                         self.eat(TokenType.COMMA)
-                        args.append(self.expr())
+                        args.append(self.comparison())
                 self.eat(TokenType.RPAREN)
                 return Call(func=name_node, args=args)
                 
@@ -83,9 +97,9 @@ class Parser:
         
         elif token.type == TokenType.LPAREN:
             self.eat(TokenType.LPAREN)
-            node = self.expr()
+            node = self.comparison()
             self.eat(TokenType.RPAREN)
             return node
             
         else:
-            raise SyntaxError(f"Unexpected token in expression: {token.type.name} ('{token.value}')")
+            raise SyntaxError(f"Unexpected token: {token.type.name}")

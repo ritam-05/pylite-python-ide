@@ -6,12 +6,18 @@ from typing import List
 class TokenType(Enum):
     IDENTIFIER = auto()
     NUMBER     = auto()
+    TRUE       = auto()  # ADDED
+    FALSE      = auto()  # ADDED
     ASSIGN     = auto()
     PLUS       = auto()
     STAR       = auto()
+    EQ         = auto()  # ==
+    NEQ        = auto()  # !=
+    LT         = auto()  # <
+    GT         = auto()  # >
     LPAREN     = auto()
     RPAREN     = auto()
-    COMMA      = auto()  # ADDED: Comma for function arguments
+    COMMA      = auto()
     NEWLINE    = auto()
     EOF        = auto()
 
@@ -22,19 +28,26 @@ class Token:
     line: int
     column: int
 
-    def __repr__(self):
-        return f"Token({self.type.name}, {repr(self.value)}, line={self.line}, col={self.column})"
-
 class Lexer:
+    # KEYWORDS dictionary to intercept reserved words
+    KEYWORDS = {
+        'True': TokenType.TRUE,
+        'False': TokenType.FALSE
+    }
+
     RULES = [
         ('NUMBER',     r'\d+'),
-        ('IDENTIFIER', r'[a-zA-Z_]\w*'),
+        ('EQ',         r'=='),  # Must come before ASSIGN (=)
+        ('NEQ',        r'!='),
         ('ASSIGN',     r'='),
+        ('LT',         r'<'),
+        ('GT',         r'>'),
+        ('IDENTIFIER', r'[a-zA-Z_]\w*'),
         ('PLUS',       r'\+'),
         ('STAR',       r'\*'),
         ('LPAREN',     r'\('),
         ('RPAREN',     r'\)'),
-        ('COMMA',      r','),   # ADDED: Comma rule
+        ('COMMA',      r','),
         ('NEWLINE',    r'\n'),
         ('SKIP',       r'[ \t]+'),
         ('MISMATCH',   r'.'),
@@ -57,13 +70,18 @@ class Lexer:
             if kind == 'SKIP':
                 continue
             elif kind == 'MISMATCH':
-                raise SyntaxError(f"Unexpected character '{value}' at line {line}, column {column}")
+                raise SyntaxError(f"Unexpected character '{value}' at line {line}")
             elif kind == 'NEWLINE':
                 tokens.append(Token(TokenType.NEWLINE, value, line, column))
                 line += 1
                 line_start = match.end()
             else:
-                token_type = TokenType[kind]
+                # Intercept keywords
+                if kind == 'IDENTIFIER' and value in self.KEYWORDS:
+                    token_type = self.KEYWORDS[value]
+                else:
+                    token_type = TokenType[kind]
+                
                 tokens.append(Token(token_type, value, line, column))
 
         tokens.append(Token(TokenType.EOF, "", line, len(self.source_code) - line_start))
