@@ -1,6 +1,6 @@
 from typing import List
 from pylite.lexer import Token, TokenType
-from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While, FunctionDef, Return
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While, FunctionDef, Return, ListLiteral, Subscript
 
 class Parser:
     def __init__(self, tokens: List[Token]):
@@ -28,13 +28,11 @@ class Parser:
         return statements
 
     def statement(self) -> ASTNode:
-        # ADDED: Parse Function Definitions
         if self.current_token().type == TokenType.DEF:
             self.eat(TokenType.DEF)
             func_name = self.current_token().value
             self.eat(TokenType.IDENTIFIER)
             self.eat(TokenType.LPAREN)
-            
             params = []
             if self.current_token().type != TokenType.RPAREN:
                 params.append(self.current_token().value)
@@ -43,27 +41,21 @@ class Parser:
                     self.eat(TokenType.COMMA)
                     params.append(self.current_token().value)
                     self.eat(TokenType.IDENTIFIER)
-            
             self.eat(TokenType.RPAREN)
             self.eat(TokenType.COLON)
-            
             while self.current_token().type == TokenType.NEWLINE:
                 self.eat(TokenType.NEWLINE)
             self.eat(TokenType.INDENT)
-            
             body = []
             while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
                 if self.current_token().type == TokenType.NEWLINE:
                     self.eat(TokenType.NEWLINE)
                     continue
                 body.append(self.statement())
-                
             if self.current_token().type == TokenType.DEDENT:
                 self.eat(TokenType.DEDENT)
-                
             return FunctionDef(name=func_name, params=params, body=body)
 
-        # ADDED: Parse Return Statements
         if self.current_token().type == TokenType.RETURN:
             self.eat(TokenType.RETURN)
             value = self.comparison()
@@ -103,16 +95,17 @@ class Parser:
                 self.eat(TokenType.DEDENT)
             return While(condition=condition, body=body)
 
-        if self.current_token().type == TokenType.IDENTIFIER:
-            next_pos = self.pos + 1
-            if next_pos < len(self.tokens) and self.tokens[next_pos].type == TokenType.ASSIGN:
-                name = self.current_token().value
-                self.eat(TokenType.IDENTIFIER)
-                self.eat(TokenType.ASSIGN)
-                value = self.comparison()
-                return Assign(name=name, value=value)
+        # MODIFIED: A much cleaner way to handle assignments!
+        # First, parse an expression.
+        expr = self.comparison()
         
-        return self.comparison()
+        # If the very next token is an '=', it means this was an assignment.
+        if self.current_token().type == TokenType.ASSIGN:
+            self.eat(TokenType.ASSIGN)
+            value = self.comparison()
+            return Assign(target=expr, value=value)
+            
+        return expr
 
     def comparison(self) -> ASTNode:
         node = self.expr()
@@ -139,18 +132,40 @@ class Parser:
 
     def factor(self) -> ASTNode:
         token = self.current_token()
+        
+        # 1. Parse the base value
         if token.type == TokenType.NUMBER:
             self.eat(TokenType.NUMBER)
-            return Number(value=int(token.value))
+            node = Number(value=int(token.value))
         elif token.type == TokenType.TRUE:
             self.eat(TokenType.TRUE)
-            return Boolean(value=True)
+            node = Boolean(value=True)
         elif token.type == TokenType.FALSE:
             self.eat(TokenType.FALSE)
-            return Boolean(value=False)
+            node = Boolean(value=False)
         elif token.type == TokenType.IDENTIFIER:
             self.eat(TokenType.IDENTIFIER)
-            name_node = Name(value=token.value)
+            node = Name(value=token.value)
+        elif token.type == TokenType.LPAREN:
+            self.eat(TokenType.LPAREN)
+            node = self.comparison()
+            self.eat(TokenType.RPAREN)
+        elif token.type == TokenType.LBRACKET: # ADDED: Parse Lists
+            self.eat(TokenType.LBRACKET)
+            elements = []
+            if self.current_token().type != TokenType.RBRACKET:
+                elements.append(self.comparison())
+                while self.current_token().type == TokenType.COMMA:
+                    self.eat(TokenType.COMMA)
+                    elements.append(self.comparison())
+            self.eat(TokenType.RBRACKET)
+            node = ListLiteral(elements=elements)
+        else:
+            raise SyntaxError(f"Unexpected token: {token.type.name} at line {token.line}")
+
+        # 2. Check for postfix operators (Function calls or List Indexing)
+        # This loops, allowing chained operations like `matrix[0][1]()`
+        while self.current_token().type in (TokenType.LPAREN, TokenType.LBRACKET):
             if self.current_token().type == TokenType.LPAREN:
                 self.eat(TokenType.LPAREN)
                 args = []
@@ -160,12 +175,12 @@ class Parser:
                         self.eat(TokenType.COMMA)
                         args.append(self.comparison())
                 self.eat(TokenType.RPAREN)
-                return Call(func=name_node, args=args)
-            return name_node
-        elif token.type == TokenType.LPAREN:
-            self.eat(TokenType.LPAREN)
-            node = self.comparison()
-            self.eat(TokenType.RPAREN)
-            return node
-        else:
-            raise SyntaxError(f"Unexpected token: {token.type.name} at line {token.line}")
+                node = Call(func=node, args=args)
+                
+            elif self.current_token().type == TokenType.LBRACKET:
+                self.eat(TokenType.LBRACKET)
+                index = self.comparison()
+                self.eat(TokenType.RBRACKET)
+                node = Subscript(obj=node, index=index)
+                
+        return node

@@ -112,7 +112,6 @@ while x > 0:
     assert captured.out == "3\n2\n1\n"
 
 def test_interpreter_functions_and_recursion(capsys):
-    # Testing both local scope and recursion!
     code = """
 def factorial(n):
     if n == 0:
@@ -130,3 +129,23 @@ print(factorial(5))
     
     captured = capsys.readouterr()
     assert captured.out == "120\n"
+
+def test_interpreter_lists(capsys):
+    code = """
+arr = [10, 20, 30]
+print(arr[0])
+
+# Modify the list
+arr[1] = 99
+print(arr[1])
+print(arr[2])
+"""
+    lexer = Lexer(code)
+    parser = Parser(lexer.tokenize())
+    ast = parser.parse()
+    
+    interpreter = Interpreter()
+    interpreter.interpret(ast)
+    
+    captured = capsys.readouterr()
+    assert captured.out == "10\n99\n30\n"

@@ -24,7 +24,7 @@ class BinOp(ASTNode):
 
 @dataclass
 class Assign(ASTNode):
-    name: str
+    target: ASTNode  # MODIFIED: Was 'name: str'. Now it can be a Name OR a Subscript!
     value: ASTNode
 
 @dataclass
@@ -42,14 +42,23 @@ class While(ASTNode):
     condition: ASTNode
     body: List[ASTNode]
 
-# ADDED: Represents a function definition
 @dataclass
 class FunctionDef(ASTNode):
     name: str
     params: List[str]
     body: List[ASTNode]
 
-# ADDED: Represents a return statement
 @dataclass
 class Return(ASTNode):
     value: ASTNode
+
+# ADDED: Represents a list like [1, 2, 3]
+@dataclass
+class ListLiteral(ASTNode):
+    elements: List[ASTNode]
+
+# ADDED: Represents indexing like arr[0]
+@dataclass
+class Subscript(ASTNode):
+    obj: ASTNode
+    index: ASTNode

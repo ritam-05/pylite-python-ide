@@ -10,8 +10,8 @@ class TokenType(Enum):
     FALSE      = auto()
     IF         = auto()
     WHILE      = auto()
-    DEF        = auto()  # ADDED
-    RETURN     = auto()  # ADDED
+    DEF        = auto()
+    RETURN     = auto()
     ASSIGN     = auto()
     PLUS       = auto()
     MINUS      = auto()
@@ -22,6 +22,8 @@ class TokenType(Enum):
     GT         = auto()
     LPAREN     = auto()
     RPAREN     = auto()
+    LBRACKET   = auto()
+    RBRACKET   = auto()
     COMMA      = auto()
     COLON      = auto()
     NEWLINE    = auto()
@@ -42,8 +44,8 @@ class Lexer:
         'False': TokenType.FALSE,
         'if': TokenType.IF,
         'while': TokenType.WHILE,
-        'def': TokenType.DEF,        # ADDED
-        'return': TokenType.RETURN   # ADDED
+        'def': TokenType.DEF,
+        'return': TokenType.RETURN
     }
 
     RULES = [
@@ -59,9 +61,12 @@ class Lexer:
         ('STAR',       r'\*'),
         ('LPAREN',     r'\('),
         ('RPAREN',     r'\)'),
+        ('LBRACKET',   r'\['),
+        ('RBRACKET',   r'\]'),
         ('COMMA',      r','),
         ('COLON',      r':'),
         ('NEWLINE',    r'\r?\n[ \t]*'),
+        ('COMMENT',    r'#.*'),         # ADDED: Match '#' followed by any characters
         ('SKIP',       r'[ \t]+'),
         ('MISMATCH',   r'.'),
     ]
@@ -81,7 +86,8 @@ class Lexer:
             value = match.group()
             column = match.start() - line_start
 
-            if kind == 'SKIP':
+            # MODIFIED: Ignore both SKIP and COMMENT tokens
+            if kind in ('SKIP', 'COMMENT'):
                 continue
             elif kind == 'MISMATCH':
                 raise SyntaxError(f"Unexpected character '{value}' at line {line}")
@@ -103,7 +109,6 @@ class Lexer:
                         tokens.append(Token(TokenType.DEDENT, "", line, 0))
                     if indent_level != indent_stack[-1]:
                         raise IndentationError(f"Unindent does not match any outer indentation level at line {line}")
-
             else:
                 if kind == 'IDENTIFIER' and value in self.KEYWORDS:
                     token_type = self.KEYWORDS[value]
