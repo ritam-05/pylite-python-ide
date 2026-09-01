@@ -1,6 +1,6 @@
 from typing import List
 from pylite.lexer import Token, TokenType
-from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While, FunctionDef, Return, ListLiteral, Subscript
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While, FunctionDef, Return, ListLiteral, Subscript, DictLiteral
 
 class Parser:
     def __init__(self, tokens: List[Token]):
@@ -95,11 +95,8 @@ class Parser:
                 self.eat(TokenType.DEDENT)
             return While(condition=condition, body=body)
 
-        # MODIFIED: A much cleaner way to handle assignments!
-        # First, parse an expression.
         expr = self.comparison()
         
-        # If the very next token is an '=', it means this was an assignment.
         if self.current_token().type == TokenType.ASSIGN:
             self.eat(TokenType.ASSIGN)
             value = self.comparison()
@@ -133,7 +130,6 @@ class Parser:
     def factor(self) -> ASTNode:
         token = self.current_token()
         
-        # 1. Parse the base value
         if token.type == TokenType.NUMBER:
             self.eat(TokenType.NUMBER)
             node = Number(value=int(token.value))
@@ -150,7 +146,7 @@ class Parser:
             self.eat(TokenType.LPAREN)
             node = self.comparison()
             self.eat(TokenType.RPAREN)
-        elif token.type == TokenType.LBRACKET: # ADDED: Parse Lists
+        elif token.type == TokenType.LBRACKET:
             self.eat(TokenType.LBRACKET)
             elements = []
             if self.current_token().type != TokenType.RBRACKET:
@@ -160,11 +156,24 @@ class Parser:
                     elements.append(self.comparison())
             self.eat(TokenType.RBRACKET)
             node = ListLiteral(elements=elements)
+        elif token.type == TokenType.LBRACE:  # ADDED: Parse Dictionaries
+            self.eat(TokenType.LBRACE)
+            keys = []
+            values = []
+            if self.current_token().type != TokenType.RBRACE:
+                keys.append(self.comparison())
+                self.eat(TokenType.COLON)
+                values.append(self.comparison())
+                while self.current_token().type == TokenType.COMMA:
+                    self.eat(TokenType.COMMA)
+                    keys.append(self.comparison())
+                    self.eat(TokenType.COLON)
+                    values.append(self.comparison())
+            self.eat(TokenType.RBRACE)
+            node = DictLiteral(keys=keys, values=values)
         else:
             raise SyntaxError(f"Unexpected token: {token.type.name} at line {token.line}")
 
-        # 2. Check for postfix operators (Function calls or List Indexing)
-        # This loops, allowing chained operations like `matrix[0][1]()`
         while self.current_token().type in (TokenType.LPAREN, TokenType.LBRACKET):
             if self.current_token().type == TokenType.LPAREN:
                 self.eat(TokenType.LPAREN)

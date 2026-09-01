@@ -24,6 +24,8 @@ class TokenType(Enum):
     RPAREN     = auto()
     LBRACKET   = auto()
     RBRACKET   = auto()
+    LBRACE     = auto()  # ADDED: {
+    RBRACE     = auto()  # ADDED: }
     COMMA      = auto()
     COLON      = auto()
     NEWLINE    = auto()
@@ -63,10 +65,12 @@ class Lexer:
         ('RPAREN',     r'\)'),
         ('LBRACKET',   r'\['),
         ('RBRACKET',   r'\]'),
+        ('LBRACE',     r'\{'),  # ADDED
+        ('RBRACE',     r'\}'),  # ADDED
         ('COMMA',      r','),
         ('COLON',      r':'),
         ('NEWLINE',    r'\r?\n[ \t]*'),
-        ('COMMENT',    r'#.*'),         # ADDED: Match '#' followed by any characters
+        ('COMMENT',    r'#.*'),
         ('SKIP',       r'[ \t]+'),
         ('MISMATCH',   r'.'),
     ]
@@ -86,7 +90,6 @@ class Lexer:
             value = match.group()
             column = match.start() - line_start
 
-            # MODIFIED: Ignore both SKIP and COMMENT tokens
             if kind in ('SKIP', 'COMMENT'):
                 continue
             elif kind == 'MISMATCH':

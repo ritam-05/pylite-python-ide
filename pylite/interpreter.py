@@ -1,5 +1,5 @@
 from typing import Any, Dict, List
-from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While, FunctionDef, Return, ListLiteral, Subscript
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While, FunctionDef, Return, ListLiteral, Subscript, DictLiteral
 
 class ReturnException(Exception):
     def __init__(self, value):
@@ -7,8 +7,10 @@ class ReturnException(Exception):
 
 class Interpreter:
     def __init__(self):
+        # ADDED: Inject 'len' into the native environment
         self.environment: Dict[str, Any] = {
-            "print": print
+            "print": print,
+            "len": len
         }
 
     def visit(self, node: ASTNode) -> Any:
@@ -22,8 +24,9 @@ class Interpreter:
         elif isinstance(node, While): return self.visit_While(node)
         elif isinstance(node, FunctionDef): return self.visit_FunctionDef(node)
         elif isinstance(node, Return): return self.visit_Return(node)
-        elif isinstance(node, ListLiteral): return self.visit_ListLiteral(node) # ADDED
-        elif isinstance(node, Subscript): return self.visit_Subscript(node)     # ADDED
+        elif isinstance(node, ListLiteral): return self.visit_ListLiteral(node)
+        elif isinstance(node, Subscript): return self.visit_Subscript(node)
+        elif isinstance(node, DictLiteral): return self.visit_DictLiteral(node)  # ADDED
         else: raise Exception(f"No visit method for {type(node).__name__}")
 
     def visit_Number(self, node: Number) -> int: return node.value
@@ -48,16 +51,11 @@ class Interpreter:
         elif node.op == '>': return left > right
         else: raise Exception(f"Unknown operator: {node.op}")
 
-    # MODIFIED: Handles assigning to variables AND list indices
     def visit_Assign(self, node: Assign) -> None:
         value = self.visit(node.value)
-        
         if isinstance(node.target, Name):
-            # Normal variable assignment: x = 10
             self.environment[node.target.value] = value
-            
         elif isinstance(node.target, Subscript):
-            # List index assignment: arr[0] = 10
             obj = self.visit(node.target.obj)
             index = self.visit(node.target.index)
             obj[index] = value
@@ -71,16 +69,25 @@ class Interpreter:
         value = self.visit(node.value)
         raise ReturnException(value)
 
-    # ADDED: Create a Python list
     def visit_ListLiteral(self, node: ListLiteral) -> Any:
         return [self.visit(element) for element in node.elements]
 
-    # ADDED: Access an element from a list
+    # ADDED: Create a Python dictionary from AST nodes
+    def visit_DictLiteral(self, node: DictLiteral) -> Any:
+        result = {}
+        for k_node, v_node in zip(node.keys, node.values):
+            key = self.visit(k_node)
+            value = self.visit(v_node)
+            result[key] = value
+        return result
+
     def visit_Subscript(self, node: Subscript) -> Any:
         obj = self.visit(node.obj)
         index = self.visit(node.index)
         try:
             return obj[index]
+        except KeyError:
+            raise KeyError(f"Key not found: {index}")
         except IndexError:
             raise IndexError("List index out of range")
         except TypeError:

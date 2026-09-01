@@ -149,3 +149,28 @@ print(arr[2])
     
     captured = capsys.readouterr()
     assert captured.out == "10\n99\n30\n"
+
+def test_interpreter_dicts_and_len(capsys):
+    code = """
+# Test dict creation
+map = {1: 100, 2: 200}
+print(map[1])
+
+# Test dict modification
+map[3] = 300
+print(map[3])
+
+# Test len built-in
+arr = [1, 2, 3, 4]
+print(len(arr))
+print(len(map))
+"""
+    lexer = Lexer(code)
+    parser = Parser(lexer.tokenize())
+    ast = parser.parse()
+    
+    interpreter = Interpreter()
+    interpreter.interpret(ast)
+    
+    captured = capsys.readouterr()
+    assert captured.out == "100\n300\n4\n3\n"

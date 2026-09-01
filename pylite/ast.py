@@ -24,7 +24,7 @@ class BinOp(ASTNode):
 
 @dataclass
 class Assign(ASTNode):
-    target: ASTNode  # MODIFIED: Was 'name: str'. Now it can be a Name OR a Subscript!
+    target: ASTNode
     value: ASTNode
 
 @dataclass
@@ -52,13 +52,17 @@ class FunctionDef(ASTNode):
 class Return(ASTNode):
     value: ASTNode
 
-# ADDED: Represents a list like [1, 2, 3]
 @dataclass
 class ListLiteral(ASTNode):
     elements: List[ASTNode]
 
-# ADDED: Represents indexing like arr[0]
 @dataclass
 class Subscript(ASTNode):
     obj: ASTNode
     index: ASTNode
+
+# ADDED: Represents a dictionary like {1: "a", 2: "b"}
+@dataclass
+class DictLiteral(ASTNode):
+    keys: List[ASTNode]
+    values: List[ASTNode]
