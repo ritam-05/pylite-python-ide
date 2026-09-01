@@ -8,13 +8,12 @@ class Compiler:
 
     def emit(self, opcode: Op, arg: Any = None):
         self.instructions.append(Instruction(opcode, arg))
-        return len(self.instructions) - 1  # Return index for jump patching
+        return len(self.instructions) - 1
 
     def compile(self, statements: List[ASTNode]) -> PyLiteFunction:
         self.instructions = []
         for stmt in statements:
             self.visit(stmt)
-        # End the main script with a return None
         self.emit(Op.LOAD_CONST, None)
         self.emit(Op.RETURN_VALUE)
         return PyLiteFunction("<main>", [], self.instructions)
@@ -30,12 +29,18 @@ class Compiler:
         elif isinstance(node, FunctionDef): self.visit_FunctionDef(node)
         elif isinstance(node, Call): self.visit_Call(node)
         elif isinstance(node, Return): self.visit_Return(node)
+        elif isinstance(node, ListLiteral): self.visit_ListLiteral(node)
+        elif isinstance(node, DictLiteral): self.visit_DictLiteral(node)
+        elif isinstance(node, Subscript): self.visit_Subscript(node)
+        elif isinstance(node, ClassDef): self.visit_ClassDef(node)
+        elif isinstance(node, Attribute): self.visit_Attribute(node)
+        elif isinstance(node, Import): self.visit_Import(node)
+        elif isinstance(node, ImportFrom): self.visit_ImportFrom(node)
         else:
-            raise NotImplementedError(f"Compiler doesn't support {type(node).__name__} yet")
+            raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
 
     def visit_BinOp(self, node: BinOp):
-        self.visit(node.left)
-        self.visit(node.right)
+        self.visit(node.left); self.visit(node.right)
         if node.op == '+': self.emit(Op.ADD)
         elif node.op == '-': self.emit(Op.SUB)
         elif node.op == '*': self.emit(Op.MUL)
@@ -48,39 +53,36 @@ class Compiler:
         self.visit(node.value)
         if isinstance(node.target, Name):
             self.emit(Op.STORE_NAME, node.target.value)
+        elif isinstance(node.target, Subscript):
+            self.visit(node.target.obj)
+            self.visit(node.target.index)
+            self.emit(Op.STORE_INDEX)
+        elif isinstance(node.target, Attribute):
+            self.visit(node.target.obj)
+            self.emit(Op.STORE_ATTR, node.target.attr)
 
     def visit_If(self, node: If):
         self.visit(node.condition)
         jump_idx = self.emit(Op.JUMP_IF_FALSE)
-        for stmt in node.body:
-            self.visit(stmt)
-        # Patch the jump target
+        for stmt in node.body: self.visit(stmt)
         self.instructions[jump_idx].arg = len(self.instructions)
 
     def visit_While(self, node: While):
         start_idx = len(self.instructions)
         self.visit(node.condition)
         jump_idx = self.emit(Op.JUMP_IF_FALSE)
-        
-        for stmt in node.body:
-            self.visit(stmt)
-            
+        for stmt in node.body: self.visit(stmt)
         self.emit(Op.JUMP, start_idx)
         self.instructions[jump_idx].arg = len(self.instructions)
 
     def visit_FunctionDef(self, node: FunctionDef):
-        # We use a separate compiler for the function body
-        func_compiler = Compiler()
-        for stmt in node.body:
-            func_compiler.visit(stmt)
-        
-        # Ensure the function always returns something
-        if not func_compiler.instructions or func_compiler.instructions[-1].opcode != Op.RETURN_VALUE:
-            func_compiler.emit(Op.LOAD_CONST, None)
-            func_compiler.emit(Op.RETURN_VALUE)
-            
-        compiled_func = PyLiteFunction(node.name, node.params, func_compiler.instructions)
-        self.emit(Op.MAKE_FUNCTION, compiled_func)
+        func_comp = Compiler()
+        for stmt in node.body: func_comp.visit(stmt)
+        if not func_comp.instructions or func_comp.instructions[-1].opcode != Op.RETURN_VALUE:
+            func_comp.emit(Op.LOAD_CONST, None)
+            func_comp.emit(Op.RETURN_VALUE)
+        func = PyLiteFunction(node.name, node.params, func_comp.instructions)
+        self.emit(Op.MAKE_FUNCTION, func)
         self.emit(Op.STORE_NAME, node.name)
 
     def visit_Return(self, node: Return):
@@ -88,7 +90,48 @@ class Compiler:
         self.emit(Op.RETURN_VALUE)
 
     def visit_Call(self, node: Call):
-        self.visit(node.func) # Load the function
-        for arg in node.args:
-            self.visit(arg)   # Load arguments
+        self.visit(node.func)
+        for arg in node.args: self.visit(arg)
         self.emit(Op.CALL_FUNCTION, len(node.args))
+
+    def visit_ListLiteral(self, node: ListLiteral):
+        for el in node.elements: self.visit(el)
+        self.emit(Op.BUILD_LIST, len(node.elements))
+
+    def visit_DictLiteral(self, node: DictLiteral):
+        for k, v in zip(node.keys, node.values):
+            self.visit(k)
+            self.visit(v)
+        self.emit(Op.BUILD_DICT, len(node.keys))
+
+    def visit_Subscript(self, node: Subscript):
+        self.visit(node.obj)
+        self.visit(node.index)
+        self.emit(Op.LOAD_INDEX)
+
+    # ADDED FOR DSA SUPPORT
+    def visit_ClassDef(self, node: ClassDef):
+        methods = {}
+        for stmt in node.body:
+            if isinstance(stmt, FunctionDef):
+                fc = Compiler()
+                for s in stmt.body: fc.visit(s)
+                if not fc.instructions or fc.instructions[-1].opcode != Op.RETURN_VALUE:
+                    fc.emit(Op.LOAD_CONST, None)
+                    fc.emit(Op.RETURN_VALUE)
+                methods[stmt.name] = PyLiteFunction(stmt.name, stmt.params, fc.instructions)
+        self.emit(Op.MAKE_CLASS, (node.name, methods))
+        self.emit(Op.STORE_NAME, node.name)
+
+    def visit_Attribute(self, node: Attribute):
+        self.visit(node.obj)
+        self.emit(Op.LOAD_ATTR, node.attr)
+
+    def visit_Import(self, node: Import):
+        self.emit(Op.IMPORT_NAME, node.module)
+        self.emit(Op.STORE_NAME, node.module)
+
+    def visit_ImportFrom(self, node: ImportFrom):
+        self.emit(Op.IMPORT_FROM, (node.module, node.names))
+        for name in reversed(node.names): # Store in correct order
+            self.emit(Op.STORE_NAME, name)

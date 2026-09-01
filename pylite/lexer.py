@@ -12,6 +12,9 @@ class TokenType(Enum):
     WHILE      = auto()
     DEF        = auto()
     RETURN     = auto()
+    CLASS      = auto()  # ADDED
+    IMPORT     = auto()  # ADDED
+    FROM       = auto()  # ADDED
     ASSIGN     = auto()
     PLUS       = auto()
     MINUS      = auto()
@@ -24,10 +27,11 @@ class TokenType(Enum):
     RPAREN     = auto()
     LBRACKET   = auto()
     RBRACKET   = auto()
-    LBRACE     = auto()  # ADDED: {
-    RBRACE     = auto()  # ADDED: }
+    LBRACE     = auto()
+    RBRACE     = auto()
     COMMA      = auto()
     COLON      = auto()
+    DOT        = auto()  # ADDED
     NEWLINE    = auto()
     INDENT     = auto()
     DEDENT     = auto()
@@ -47,7 +51,10 @@ class Lexer:
         'if': TokenType.IF,
         'while': TokenType.WHILE,
         'def': TokenType.DEF,
-        'return': TokenType.RETURN
+        'return': TokenType.RETURN,
+        'class': TokenType.CLASS,
+        'import': TokenType.IMPORT,
+        'from': TokenType.FROM
     }
 
     RULES = [
@@ -65,10 +72,11 @@ class Lexer:
         ('RPAREN',     r'\)'),
         ('LBRACKET',   r'\['),
         ('RBRACKET',   r'\]'),
-        ('LBRACE',     r'\{'),  # ADDED
-        ('RBRACE',     r'\}'),  # ADDED
+        ('LBRACE',     r'\{'),
+        ('RBRACE',     r'\}'),
         ('COMMA',      r','),
         ('COLON',      r':'),
+        ('DOT',        r'\.'),   # ADDED
         ('NEWLINE',    r'\r?\n[ \t]*'),
         ('COMMENT',    r'#.*'),
         ('SKIP',       r'[ \t]+'),
@@ -111,13 +119,12 @@ class Lexer:
                         indent_stack.pop()
                         tokens.append(Token(TokenType.DEDENT, "", line, 0))
                     if indent_level != indent_stack[-1]:
-                        raise IndentationError(f"Unindent does not match any outer indentation level at line {line}")
+                        raise IndentationError(f"Unindent does not match outer level at line {line}")
             else:
                 if kind == 'IDENTIFIER' and value in self.KEYWORDS:
-                    token_type = self.KEYWORDS[value]
+                    tokens.append(Token(self.KEYWORDS[value], value, line, column))
                 else:
-                    token_type = TokenType[kind]
-                tokens.append(Token(token_type, value, line, column))
+                    tokens.append(Token(TokenType[kind], value, line, column))
 
         while len(indent_stack) > 1:
             indent_stack.pop()
