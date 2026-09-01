@@ -6,19 +6,23 @@ from typing import List
 class TokenType(Enum):
     IDENTIFIER = auto()
     NUMBER     = auto()
-    TRUE       = auto()  # ADDED
-    FALSE      = auto()  # ADDED
+    TRUE       = auto()
+    FALSE      = auto()
+    IF         = auto()  # ADDED
     ASSIGN     = auto()
     PLUS       = auto()
     STAR       = auto()
-    EQ         = auto()  # ==
-    NEQ        = auto()  # !=
-    LT         = auto()  # <
-    GT         = auto()  # >
+    EQ         = auto()
+    NEQ        = auto()
+    LT         = auto()
+    GT         = auto()
     LPAREN     = auto()
     RPAREN     = auto()
     COMMA      = auto()
+    COLON      = auto()  # ADDED
     NEWLINE    = auto()
+    INDENT     = auto()  # ADDED: Start of block
+    DEDENT     = auto()  # ADDED: End of block
     EOF        = auto()
 
 @dataclass
@@ -29,15 +33,15 @@ class Token:
     column: int
 
 class Lexer:
-    # KEYWORDS dictionary to intercept reserved words
     KEYWORDS = {
         'True': TokenType.TRUE,
-        'False': TokenType.FALSE
+        'False': TokenType.FALSE,
+        'if': TokenType.IF        # ADDED
     }
 
     RULES = [
         ('NUMBER',     r'\d+'),
-        ('EQ',         r'=='),  # Must come before ASSIGN (=)
+        ('EQ',         r'=='),
         ('NEQ',        r'!='),
         ('ASSIGN',     r'='),
         ('LT',         r'<'),
@@ -48,8 +52,9 @@ class Lexer:
         ('LPAREN',     r'\('),
         ('RPAREN',     r'\)'),
         ('COMMA',      r','),
-        ('NEWLINE',    r'\n'),
-        ('SKIP',       r'[ \t]+'),
+        ('COLON',      r':'),     # ADDED
+        ('NEWLINE',    r'\r?\n[ \t]*'), # MODIFIED: Captures the newline AND leading spaces of the next line
+        ('SKIP',       r'[ \t]+'),      # Skips inline spaces
         ('MISMATCH',   r'.'),
     ]
 
@@ -61,6 +66,7 @@ class Lexer:
         tokens = []
         line = 1
         line_start = 0
+        indent_stack = [0]  # Stack to track indentation levels
 
         for match in self.regex.finditer(self.source_code):
             kind = match.lastgroup
@@ -71,18 +77,38 @@ class Lexer:
                 continue
             elif kind == 'MISMATCH':
                 raise SyntaxError(f"Unexpected character '{value}' at line {line}")
+            
             elif kind == 'NEWLINE':
-                tokens.append(Token(TokenType.NEWLINE, value, line, column))
+                # Strip out the actual newline character to just get the spaces
+                spaces = value.replace('\r', '').replace('\n', '')
+                indent_level = len(spaces)
+
+                tokens.append(Token(TokenType.NEWLINE, "\n", line, column))
                 line += 1
-                line_start = match.end()
+                line_start = match.end() - indent_level # Reset column calculation
+
+                # Determine INDENT or DEDENT
+                if indent_level > indent_stack[-1]:
+                    indent_stack.append(indent_level)
+                    tokens.append(Token(TokenType.INDENT, spaces, line, 0))
+                elif indent_level < indent_stack[-1]:
+                    while indent_level < indent_stack[-1]:
+                        indent_stack.pop()
+                        tokens.append(Token(TokenType.DEDENT, "", line, 0))
+                    if indent_level != indent_stack[-1]:
+                        raise IndentationError(f"Unindent does not match any outer indentation level at line {line}")
+
             else:
-                # Intercept keywords
                 if kind == 'IDENTIFIER' and value in self.KEYWORDS:
                     token_type = self.KEYWORDS[value]
                 else:
                     token_type = TokenType[kind]
-                
                 tokens.append(Token(token_type, value, line, column))
+
+        # At EOF, we must DEDENT back to zero
+        while len(indent_stack) > 1:
+            indent_stack.pop()
+            tokens.append(Token(TokenType.DEDENT, "", line, 0))
 
         tokens.append(Token(TokenType.EOF, "", line, len(self.source_code) - line_start))
         return tokens

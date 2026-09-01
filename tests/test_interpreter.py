@@ -73,3 +73,23 @@ print(False)
     
     captured = capsys.readouterr()
     assert captured.out == "True\nTrue\nTrue\nTrue\nFalse\n"
+
+def test_interpreter_if_statement(capsys):
+    code = """
+x = 10
+if x > 5:
+    print(1)
+    if x == 10:
+        print(2)
+if x < 5:
+    print(3)
+"""
+    lexer = Lexer(code)
+    parser = Parser(lexer.tokenize())
+    ast = parser.parse()
+    
+    interpreter = Interpreter()
+    interpreter.interpret(ast)
+    
+    captured = capsys.readouterr()
+    assert captured.out == "1\n2\n"

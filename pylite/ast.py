@@ -10,7 +10,7 @@ class Number(ASTNode):
 
 @dataclass
 class Boolean(ASTNode):
-    value: bool  # ADDED: Represents True or False
+    value: bool
 
 @dataclass
 class Name(ASTNode):
@@ -31,3 +31,8 @@ class Assign(ASTNode):
 class Call(ASTNode):
     func: ASTNode
     args: List[ASTNode]
+
+@dataclass
+class If(ASTNode):
+    condition: ASTNode
+    body: List[ASTNode]  # A block of statements to execute if True

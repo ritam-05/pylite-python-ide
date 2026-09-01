@@ -1,5 +1,5 @@
 from typing import Any, Dict, List
-from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If
 
 class Interpreter:
     def __init__(self):
@@ -10,7 +10,7 @@ class Interpreter:
     def visit(self, node: ASTNode) -> Any:
         if isinstance(node, Number):
             return self.visit_Number(node)
-        elif isinstance(node, Boolean):    # ADDED
+        elif isinstance(node, Boolean):
             return self.visit_Boolean(node)
         elif isinstance(node, Name):
             return self.visit_Name(node)
@@ -20,6 +20,8 @@ class Interpreter:
             return self.visit_Assign(node)
         elif isinstance(node, Call):
             return self.visit_Call(node)
+        elif isinstance(node, If):         # ADDED
+            return self.visit_If(node)     # ADDED
         else:
             raise Exception(f"No visit method for {type(node).__name__}")
 
@@ -38,11 +40,9 @@ class Interpreter:
     def visit_BinOp(self, node: BinOp) -> Any:
         left = self.visit(node.left)
         right = self.visit(node.right)
-
-        # Math
+        
         if node.op == '+': return left + right
         elif node.op == '*': return left * right
-        # Comparisons (ADDED)
         elif node.op == '==': return left == right
         elif node.op == '!=': return left != right
         elif node.op == '<': return left < right
@@ -62,6 +62,14 @@ class Interpreter:
             return func(*args)
         else:
             raise TypeError(f"'{type(func).__name__}' object is not callable")
+
+    # ADDED: Handle the If block
+    def visit_If(self, node: If) -> None:
+        condition_result = self.visit(node.condition)
+        
+        if condition_result:
+            for statement in node.body:
+                self.visit(statement)
 
     def interpret(self, statements: List[ASTNode]) -> Any:
         result = None
