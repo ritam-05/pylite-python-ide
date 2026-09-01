@@ -4,3 +4,8 @@ __pycache__/
 *.pyo
 venv/
 .pytest_cache/
+
+# PyInstaller folders
+build/
+dist/
+*.spec

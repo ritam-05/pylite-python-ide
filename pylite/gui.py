@@ -11,7 +11,6 @@ from pylite.parser import Parser
 from pylite.compiler import Compiler
 from pylite.vm import VM
 
-# The permanent dark background for the borders, toolbars, and panes
 BASE_DARK = "#1e1e1e"
 
 THEMES = {
@@ -37,7 +36,6 @@ class PyLiteIDE:
     def __init__(self):
         self.root = tk.Tk()
         self.root.geometry("1000x600") 
-        # Force the main window background to always be dark
         self.root.configure(bg=BASE_DARK)
         
         self.font = ("Consolas", 11)
@@ -78,11 +76,9 @@ class PyLiteIDE:
         self.root.bind("<Control-s>", lambda e: self.save_file())
 
     def _build_ui(self):
-        # Toolbar (Standard tk.Frame to force dark background)
         toolbar = tk.Frame(self.root, bg=BASE_DARK)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
         
-        # Modern Flat Buttons
         btn_style = {
             "bg": "#333333", "fg": "white", "relief": tk.FLAT, 
             "activebackground": "#555555", "activeforeground": "white",
@@ -98,19 +94,15 @@ class PyLiteIDE:
         self.btn_theme = tk.Button(toolbar, text="☀ Light Mode", command=self.toggle_theme, **btn_style)
         self.btn_theme.pack(side=tk.RIGHT, padx=5)
         
-        # Main Splitter (Standard tk.PanedWindow to force dark sash and borders)
         paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, bg=BASE_DARK, sashwidth=6, bd=0)
         paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Code Editor (Left)
         self.editor = tk.Text(paned, font=self.font, undo=True, padx=10, pady=10, borderwidth=0, relief=tk.FLAT)
         paned.add(self.editor, stretch="always", minsize=200)
         
-        # Output Console (Right)
         self.console = tk.Text(paned, font=self.font, state=tk.DISABLED, padx=10, pady=10, borderwidth=0, relief=tk.FLAT)
         paned.add(self.console, stretch="always", minsize=200)
         
-        # Status Bar (Standard tk.Label to force dark background)
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
         status_bar = tk.Label(self.root, textvariable=self.status_var, bg=BASE_DARK, fg="#888888", anchor=tk.W, font=("Consolas", 9), padx=10, pady=2)
@@ -118,23 +110,9 @@ class PyLiteIDE:
         
         self.root.bind("<F5>", lambda event: self.execute_code())
         
-        sample_code = """# PyLite
-from collections import deque
-
-def bfs(start):
-    q = deque()
-    q.append(start)
-    visited = {start: True}
-    
-    while len(q) > 0:
-        node = q.popleft()
-        print("Visited:", node)
-        
-        next_node = node + 1
-        if next_node < 4:
-            q.append(next_node)
-
-bfs(1)
+        # MODIFIED: Clean, simple boilerplate text
+        sample_code = """# Welcome to PyLite IDE!
+print("Hello from the EXE!")
 """
         self.editor.insert("1.0", sample_code)
 
@@ -149,7 +127,6 @@ bfs(1)
 
     def apply_theme(self):
         colors = THEMES[self.current_theme]
-        # Only modify the inner text areas! The borders remain BASE_DARK.
         self.editor.config(bg=colors["bg"], fg=colors["fg"], insertbackground=colors["insert"])
         self.console.config(bg=colors["console_bg"])
         
