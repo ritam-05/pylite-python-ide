@@ -6,15 +6,16 @@ from typing import List
 class TokenType(Enum):
     IDENTIFIER = auto()
     NUMBER     = auto()
+    STRING     = auto()  # ADDED: To support text in quotes
     TRUE       = auto()
     FALSE      = auto()
     IF         = auto()
     WHILE      = auto()
     DEF        = auto()
     RETURN     = auto()
-    CLASS      = auto()  # ADDED
-    IMPORT     = auto()  # ADDED
-    FROM       = auto()  # ADDED
+    CLASS      = auto()
+    IMPORT     = auto()
+    FROM       = auto()
     ASSIGN     = auto()
     PLUS       = auto()
     MINUS      = auto()
@@ -31,7 +32,7 @@ class TokenType(Enum):
     RBRACE     = auto()
     COMMA      = auto()
     COLON      = auto()
-    DOT        = auto()  # ADDED
+    DOT        = auto()
     NEWLINE    = auto()
     INDENT     = auto()
     DEDENT     = auto()
@@ -59,6 +60,7 @@ class Lexer:
 
     RULES = [
         ('NUMBER',     r'\d+'),
+        ('STRING',     r'"[^"]*"|\'[^\']*\''),  # ADDED: Matches "text" or 'text'
         ('EQ',         r'=='),
         ('NEQ',        r'!='),
         ('ASSIGN',     r'='),
@@ -76,7 +78,7 @@ class Lexer:
         ('RBRACE',     r'\}'),
         ('COMMA',      r','),
         ('COLON',      r':'),
-        ('DOT',        r'\.'),   # ADDED
+        ('DOT',        r'\.'),
         ('NEWLINE',    r'\r?\n[ \t]*'),
         ('COMMENT',    r'#.*'),
         ('SKIP',       r'[ \t]+'),

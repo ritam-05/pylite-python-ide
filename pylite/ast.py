@@ -8,6 +8,8 @@ class Number(ASTNode): value: int
 @dataclass
 class Boolean(ASTNode): value: bool
 @dataclass
+class String(ASTNode): value: str   # ADDED
+@dataclass
 class Name(ASTNode): value: str
 @dataclass
 class BinOp(ASTNode): left: ASTNode; op: str; right: ASTNode
@@ -29,8 +31,6 @@ class ListLiteral(ASTNode): elements: List[ASTNode]
 class Subscript(ASTNode): obj: ASTNode; index: ASTNode
 @dataclass
 class DictLiteral(ASTNode): keys: List[ASTNode]; values: List[ASTNode]
-
-# ADDED
 @dataclass
 class ClassDef(ASTNode): name: str; body: List[ASTNode]
 @dataclass

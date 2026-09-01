@@ -27,7 +27,6 @@ class Parser:
         return statements
 
     def statement(self) -> ASTNode:
-        # ADDED: Parse Classes
         if self.current_token().type == TokenType.CLASS:
             self.eat(TokenType.CLASS)
             name = self.current_token().value
@@ -43,14 +42,12 @@ class Parser:
             if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
             return ClassDef(name=name, body=body)
 
-        # ADDED: Parse Imports
         if self.current_token().type == TokenType.IMPORT:
             self.eat(TokenType.IMPORT)
             module = self.current_token().value
             self.eat(TokenType.IDENTIFIER)
             return Import(module=module)
 
-        # ADDED: Parse From Imports
         if self.current_token().type == TokenType.FROM:
             self.eat(TokenType.FROM)
             module = self.current_token().value
@@ -157,6 +154,10 @@ class Parser:
         if token.type == TokenType.NUMBER:
             self.eat(TokenType.NUMBER)
             node = Number(value=int(token.value))
+        elif token.type == TokenType.STRING:  # ADDED
+            self.eat(TokenType.STRING)
+            # Remove the surrounding quotes (e.g., "hello" -> hello)
+            node = String(value=token.value[1:-1])
         elif token.type == TokenType.TRUE:
             self.eat(TokenType.TRUE)
             node = Boolean(value=True)
@@ -197,7 +198,6 @@ class Parser:
         else:
             raise SyntaxError(f"Unexpected token: {token.type.name}")
 
-        # Postfix operations: calls, indices, AND attributes (.)
         while self.current_token().type in (TokenType.LPAREN, TokenType.LBRACKET, TokenType.DOT):
             if self.current_token().type == TokenType.LPAREN:
                 self.eat(TokenType.LPAREN)
@@ -216,7 +216,6 @@ class Parser:
                 self.eat(TokenType.RBRACKET)
                 node = Subscript(obj=node, index=index)
                 
-            # ADDED: Handle dot notation (e.g., node.value)
             elif self.current_token().type == TokenType.DOT:
                 self.eat(TokenType.DOT)
                 attr_name = self.current_token().value

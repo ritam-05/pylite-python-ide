@@ -21,6 +21,7 @@ class Compiler:
     def visit(self, node: ASTNode):
         if isinstance(node, Number): self.emit(Op.LOAD_CONST, node.value)
         elif isinstance(node, Boolean): self.emit(Op.LOAD_CONST, node.value)
+        elif isinstance(node, String): self.emit(Op.LOAD_CONST, node.value) # ADDED
         elif isinstance(node, Name): self.emit(Op.LOAD_NAME, node.value)
         elif isinstance(node, BinOp): self.visit_BinOp(node)
         elif isinstance(node, Assign): self.visit_Assign(node)
@@ -109,7 +110,6 @@ class Compiler:
         self.visit(node.index)
         self.emit(Op.LOAD_INDEX)
 
-    # ADDED FOR DSA SUPPORT
     def visit_ClassDef(self, node: ClassDef):
         methods = {}
         for stmt in node.body:
@@ -133,5 +133,5 @@ class Compiler:
 
     def visit_ImportFrom(self, node: ImportFrom):
         self.emit(Op.IMPORT_FROM, (node.module, node.names))
-        for name in reversed(node.names): # Store in correct order
+        for name in reversed(node.names):
             self.emit(Op.STORE_NAME, name)
