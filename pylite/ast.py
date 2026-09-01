@@ -37,8 +37,19 @@ class If(ASTNode):
     condition: ASTNode
     body: List[ASTNode]
 
-# ADDED: Represents a while loop
 @dataclass
 class While(ASTNode):
     condition: ASTNode
     body: List[ASTNode]
+
+# ADDED: Represents a function definition
+@dataclass
+class FunctionDef(ASTNode):
+    name: str
+    params: List[str]
+    body: List[ASTNode]
+
+# ADDED: Represents a return statement
+@dataclass
+class Return(ASTNode):
+    value: ASTNode

@@ -10,9 +10,11 @@ class TokenType(Enum):
     FALSE      = auto()
     IF         = auto()
     WHILE      = auto()
+    DEF        = auto()  # ADDED
+    RETURN     = auto()  # ADDED
     ASSIGN     = auto()
     PLUS       = auto()
-    MINUS      = auto()  # ADDED
+    MINUS      = auto()
     STAR       = auto()
     EQ         = auto()
     NEQ        = auto()
@@ -39,7 +41,9 @@ class Lexer:
         'True': TokenType.TRUE,
         'False': TokenType.FALSE,
         'if': TokenType.IF,
-        'while': TokenType.WHILE
+        'while': TokenType.WHILE,
+        'def': TokenType.DEF,        # ADDED
+        'return': TokenType.RETURN   # ADDED
     }
 
     RULES = [
@@ -51,7 +55,7 @@ class Lexer:
         ('GT',         r'>'),
         ('IDENTIFIER', r'[a-zA-Z_]\w*'),
         ('PLUS',       r'\+'),
-        ('MINUS',      r'-'),    # ADDED
+        ('MINUS',      r'-'),
         ('STAR',       r'\*'),
         ('LPAREN',     r'\('),
         ('RPAREN',     r'\)'),

@@ -95,7 +95,6 @@ if x < 5:
     assert captured.out == "1\n2\n"
 
 def test_interpreter_while_loop(capsys):
-    # A simple program to count down from 3 to 1
     code = """
 x = 3
 while x > 0:
@@ -111,3 +110,23 @@ while x > 0:
     
     captured = capsys.readouterr()
     assert captured.out == "3\n2\n1\n"
+
+def test_interpreter_functions_and_recursion(capsys):
+    # Testing both local scope and recursion!
+    code = """
+def factorial(n):
+    if n == 0:
+        return 1
+    return n * factorial(n - 1)
+
+print(factorial(5))
+"""
+    lexer = Lexer(code)
+    parser = Parser(lexer.tokenize())
+    ast = parser.parse()
+    
+    interpreter = Interpreter()
+    interpreter.interpret(ast)
+    
+    captured = capsys.readouterr()
+    assert captured.out == "120\n"

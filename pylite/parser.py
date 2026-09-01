@@ -1,6 +1,6 @@
 from typing import List
 from pylite.lexer import Token, TokenType
-from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While
+from pylite.ast import ASTNode, Number, Boolean, Name, BinOp, Assign, Call, If, While, FunctionDef, Return
 
 class Parser:
     def __init__(self, tokens: List[Token]):
@@ -28,14 +28,27 @@ class Parser:
         return statements
 
     def statement(self) -> ASTNode:
-        if self.current_token().type == TokenType.IF:
-            self.eat(TokenType.IF)
-            condition = self.comparison()
+        # ADDED: Parse Function Definitions
+        if self.current_token().type == TokenType.DEF:
+            self.eat(TokenType.DEF)
+            func_name = self.current_token().value
+            self.eat(TokenType.IDENTIFIER)
+            self.eat(TokenType.LPAREN)
+            
+            params = []
+            if self.current_token().type != TokenType.RPAREN:
+                params.append(self.current_token().value)
+                self.eat(TokenType.IDENTIFIER)
+                while self.current_token().type == TokenType.COMMA:
+                    self.eat(TokenType.COMMA)
+                    params.append(self.current_token().value)
+                    self.eat(TokenType.IDENTIFIER)
+            
+            self.eat(TokenType.RPAREN)
             self.eat(TokenType.COLON)
             
             while self.current_token().type == TokenType.NEWLINE:
                 self.eat(TokenType.NEWLINE)
-                
             self.eat(TokenType.INDENT)
             
             body = []
@@ -48,28 +61,46 @@ class Parser:
             if self.current_token().type == TokenType.DEDENT:
                 self.eat(TokenType.DEDENT)
                 
+            return FunctionDef(name=func_name, params=params, body=body)
+
+        # ADDED: Parse Return Statements
+        if self.current_token().type == TokenType.RETURN:
+            self.eat(TokenType.RETURN)
+            value = self.comparison()
+            return Return(value=value)
+
+        if self.current_token().type == TokenType.IF:
+            self.eat(TokenType.IF)
+            condition = self.comparison()
+            self.eat(TokenType.COLON)
+            while self.current_token().type == TokenType.NEWLINE:
+                self.eat(TokenType.NEWLINE)
+            self.eat(TokenType.INDENT)
+            body = []
+            while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
+                if self.current_token().type == TokenType.NEWLINE:
+                    self.eat(TokenType.NEWLINE)
+                    continue
+                body.append(self.statement())
+            if self.current_token().type == TokenType.DEDENT:
+                self.eat(TokenType.DEDENT)
             return If(condition=condition, body=body)
 
         if self.current_token().type == TokenType.WHILE:
             self.eat(TokenType.WHILE)
             condition = self.comparison()
             self.eat(TokenType.COLON)
-            
             while self.current_token().type == TokenType.NEWLINE:
                 self.eat(TokenType.NEWLINE)
-                
             self.eat(TokenType.INDENT)
-            
             body = []
             while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
                 if self.current_token().type == TokenType.NEWLINE:
                     self.eat(TokenType.NEWLINE)
                     continue
                 body.append(self.statement())
-                
             if self.current_token().type == TokenType.DEDENT:
                 self.eat(TokenType.DEDENT)
-                
             return While(condition=condition, body=body)
 
         if self.current_token().type == TokenType.IDENTIFIER:
@@ -91,7 +122,6 @@ class Parser:
             node = BinOp(left=node, op=op_token.value, right=self.expr())
         return node
 
-    # ADDED: Now handles both PLUS and MINUS
     def expr(self) -> ASTNode:
         node = self.term()
         while self.current_token().type in (TokenType.PLUS, TokenType.MINUS):
