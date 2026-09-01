@@ -4,21 +4,24 @@ import io
 import contextlib
 import traceback
 import os
+import datetime
 
 from pylite.lexer import Lexer
 from pylite.parser import Parser
 from pylite.compiler import Compiler
 from pylite.vm import VM
 
-# Define our color palettes
+# The permanent dark background for the borders, toolbars, and panes
+BASE_DARK = "#1e1e1e"
+
 THEMES = {
     "dark": {
         "bg": "#2b2b2b",
         "fg": "#a9b7c6",
         "insert": "white",
-        "console_bg": "#1e1e1e",
-        "console_fg": "#6a8759", # Soft green
-        "error_fg": "#cc6666"    # Soft red
+        "console_bg": "#141414",
+        "console_fg": "#6a8759", 
+        "error_fg": "#cc6666"    
     },
     "light": {
         "bg": "#ffffff",
@@ -33,7 +36,9 @@ THEMES = {
 class PyLiteIDE:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.geometry("1000x600") # Wider default window for side-by-side
+        self.root.geometry("1000x600") 
+        # Force the main window background to always be dark
+        self.root.configure(bg=BASE_DARK)
         
         self.font = ("Consolas", 11)
         self.current_theme = "dark"
@@ -44,7 +49,6 @@ class PyLiteIDE:
         self._build_ui()
         self.apply_theme()
         
-        # Start the background auto-save loop (runs every 5000ms / 5 seconds)
         self._auto_save_loop()
 
     def update_title(self):
@@ -74,35 +78,42 @@ class PyLiteIDE:
         self.root.bind("<Control-s>", lambda e: self.save_file())
 
     def _build_ui(self):
-        # Toolbar
-        toolbar = ttk.Frame(self.root)
+        # Toolbar (Standard tk.Frame to force dark background)
+        toolbar = tk.Frame(self.root, bg=BASE_DARK)
         toolbar.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
         
-        btn_run = ttk.Button(toolbar, text="▶ Run (F5)", command=self.execute_code)
-        btn_run.pack(side=tk.LEFT, padx=2)
+        # Modern Flat Buttons
+        btn_style = {
+            "bg": "#333333", "fg": "white", "relief": tk.FLAT, 
+            "activebackground": "#555555", "activeforeground": "white",
+            "font": ("Consolas", 10), "cursor": "hand2"
+        }
         
-        btn_clear = ttk.Button(toolbar, text="Clear Console", command=self.clear_console)
-        btn_clear.pack(side=tk.LEFT, padx=2)
+        btn_run = tk.Button(toolbar, text="▶ Run (F5)", command=self.execute_code, **btn_style)
+        btn_run.pack(side=tk.LEFT, padx=5)
         
-        self.btn_theme = ttk.Button(toolbar, text="☀ Light Mode", command=self.toggle_theme)
-        self.btn_theme.pack(side=tk.RIGHT, padx=2)
+        btn_clear = tk.Button(toolbar, text="Clear Console", command=self.clear_console, **btn_style)
+        btn_clear.pack(side=tk.LEFT, padx=5)
         
-        # Main Splitter - Now HORIZONTAL for RStudio feel
-        paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        self.btn_theme = tk.Button(toolbar, text="☀ Light Mode", command=self.toggle_theme, **btn_style)
+        self.btn_theme.pack(side=tk.RIGHT, padx=5)
+        
+        # Main Splitter (Standard tk.PanedWindow to force dark sash and borders)
+        paned = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, bg=BASE_DARK, sashwidth=6, bd=0)
         paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Code Editor (Left)
-        self.editor = tk.Text(paned, font=self.font, undo=True, padx=10, pady=10, borderwidth=0)
-        paned.add(self.editor, weight=1)
+        self.editor = tk.Text(paned, font=self.font, undo=True, padx=10, pady=10, borderwidth=0, relief=tk.FLAT)
+        paned.add(self.editor, stretch="always", minsize=200)
         
         # Output Console (Right)
-        self.console = tk.Text(paned, font=self.font, state=tk.DISABLED, padx=10, pady=10, borderwidth=0)
-        paned.add(self.console, weight=1)
+        self.console = tk.Text(paned, font=self.font, state=tk.DISABLED, padx=10, pady=10, borderwidth=0, relief=tk.FLAT)
+        paned.add(self.console, stretch="always", minsize=200)
         
-        # Status Bar
+        # Status Bar (Standard tk.Label to force dark background)
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
-        status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
+        status_bar = tk.Label(self.root, textvariable=self.status_var, bg=BASE_DARK, fg="#888888", anchor=tk.W, font=("Consolas", 9), padx=10, pady=2)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         
         self.root.bind("<F5>", lambda event: self.execute_code())
@@ -138,13 +149,13 @@ bfs(1)
 
     def apply_theme(self):
         colors = THEMES[self.current_theme]
+        # Only modify the inner text areas! The borders remain BASE_DARK.
         self.editor.config(bg=colors["bg"], fg=colors["fg"], insertbackground=colors["insert"])
         self.console.config(bg=colors["console_bg"])
-        # Update existing text tags if any exist
+        
         self.console.tag_config("output", foreground=colors["console_fg"])
         self.console.tag_config("error", foreground=colors["error_fg"])
 
-    # --- FILE OPERATIONS ---
     def new_file(self):
         self.editor.delete("1.0", tk.END)
         self.current_file = None
@@ -157,8 +168,7 @@ bfs(1)
             defaultextension=".py",
             filetypes=[("Python Files", "*.py"), ("All Files", "*.*")]
         )
-        if not filepath:
-            return
+        if not filepath: return
             
         try:
             with open(filepath, "r", encoding="utf-8") as f:
@@ -183,8 +193,7 @@ bfs(1)
             defaultextension=".py",
             filetypes=[("Python Files", "*.py"), ("All Files", "*.*")]
         )
-        if not filepath:
-            return
+        if not filepath: return
         self._write_to_disk(filepath, silent=False)
 
     def _write_to_disk(self, filepath, silent=True):
@@ -197,8 +206,6 @@ bfs(1)
             self.current_file = filepath
             self.update_title()
             
-            # Show the time of the last save in the status bar
-            import datetime
             time_str = datetime.datetime.now().strftime("%H:%M:%S")
             self.status_var.set(f"Auto-saved at {time_str}")
             
@@ -209,19 +216,14 @@ bfs(1)
                 messagebox.showerror("Error", f"Failed to save file:\n{e}")
 
     def _auto_save_loop(self):
-        # If there is a file associated, save it silently
         if self.current_file:
             self._write_to_disk(self.current_file, silent=True)
-        
-        # Schedule this function to run again in 5000 milliseconds
         self.root.after(5000, self._auto_save_loop)
 
-    # --- CONSOLE & EXECUTION ---
     def write_console(self, text, is_error=False):
         colors = THEMES[self.current_theme]
         self.console.config(state=tk.NORMAL)
         
-        # Ensure tags exist
         self.console.tag_config("output", foreground=colors["console_fg"])
         self.console.tag_config("error", foreground=colors["error_fg"])
         
@@ -240,8 +242,7 @@ bfs(1)
 
     def execute_code(self):
         code = self.editor.get("1.0", tk.END).strip()
-        if not code:
-            return
+        if not code: return
             
         self.clear_console()
         self.write_console(f">>> Running...\n")
