@@ -41,7 +41,8 @@ class VM:
         self.globals: Dict[str, Any] = {
             "print": pylite_print,
             "len": len,
-            "set": set
+            "set": set,
+            "range": range
         }
 
     def run(self, main_func: PyLiteFunction) -> Any:
@@ -97,11 +98,15 @@ class VM:
                 b = self.stack.pop(); a = self.stack.pop()
                 self.stack.append(a ** b)
                 
-            # --- STACK MANIPULATION FOR AUGMENTED ASSIGNMENTS ---
+            # --- STACK MANIPULATION ---
             elif instr.opcode == Op.DUP_TOP:
                 self.stack.append(self.stack[-1])
             elif instr.opcode == Op.DUP_TWO:
                 self.stack.extend(self.stack[-2:])
+            elif instr.opcode == Op.POP_TOP:
+                self.stack.pop()
+            elif instr.opcode == Op.UNARY_NOT:
+                self.stack.append(not self.stack.pop())
 
             # --- COMPARISON AND CONTROL FLOW ---
             elif instr.opcode == Op.CMP_EQ:
@@ -119,15 +124,23 @@ class VM:
                 
             elif instr.opcode == Op.JUMP_IF_FALSE:
                 if not self.stack.pop(): frame.ip = instr.arg
-            elif instr.opcode == Op.JUMP_IF_TRUE: # ADDED
+            elif instr.opcode == Op.JUMP_IF_TRUE:
                 if self.stack.pop(): frame.ip = instr.arg
             elif instr.opcode == Op.JUMP:
                 frame.ip = instr.arg
                 
-            elif instr.opcode == Op.POP_TOP: # ADDED
-                self.stack.pop()
-            elif instr.opcode == Op.UNARY_NOT: # ADDED
-                self.stack.append(not self.stack.pop())
+            # --- ITERATION PROTOCOL ---
+            elif instr.opcode == Op.GET_ITER:
+                iterable = self.stack.pop()
+                self.stack.append(iter(iterable))
+            elif instr.opcode == Op.FOR_ITER:
+                iterator = self.stack[-1]
+                try:
+                    val = next(iterator)
+                    self.stack.append(val)
+                except StopIteration:
+                    self.stack.pop()
+                    frame.ip = instr.arg
                 
             # --- STRUCTURES AND OOP ---
             elif instr.opcode == Op.MAKE_FUNCTION:

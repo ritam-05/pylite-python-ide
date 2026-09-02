@@ -13,6 +13,8 @@ class TokenType(Enum):
     ELIF       = auto()
     ELSE       = auto()
     WHILE      = auto()
+    FOR        = auto()
+    IN         = auto()
     DEF        = auto()
     RETURN     = auto()
     CLASS      = auto()
@@ -68,6 +70,8 @@ class Lexer:
         'if': TokenType.IF,
         'elif': TokenType.ELIF,
         'else': TokenType.ELSE,
+        'for': TokenType.FOR,
+        'in': TokenType.IN,
         'while': TokenType.WHILE,
         'def': TokenType.DEF,
         'return': TokenType.RETURN,

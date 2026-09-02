@@ -162,6 +162,24 @@ class Parser:
                 body.append(self.statement())
             if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
             return While(condition=condition, body=body)
+        if self.current_token().type == TokenType.FOR:
+            self.eat(TokenType.FOR)
+            target = self.expression() # Typically a Name node
+            self.eat(TokenType.IN)
+            iter_node = self.expression()
+            self.eat(TokenType.COLON)
+            
+            while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+            self.eat(TokenType.INDENT)
+            
+            body = []
+            while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
+                if self.current_token().type == TokenType.NEWLINE:
+                    self.eat(TokenType.NEWLINE); continue
+                body.append(self.statement())
+                
+            if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
+            return For(target=target, iter=iter_node, body=body)
 
         expr = self.expression()
         
@@ -176,7 +194,7 @@ class Parser:
             if op_token.type == TokenType.ASSIGN: return Assign(target=expr, value=value)
             else: return AugAssign(target=expr, op=op_token.value, value=value)
             
-        return expr
+        return Expr(value=expr)
 
     # ADDED: Master Expression Entry Point
     def expression(self) -> ASTNode:

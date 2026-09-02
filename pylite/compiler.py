@@ -36,10 +36,12 @@ class Compiler:
         elif isinstance(node, BinOp): self.visit_BinOp(node)
         elif isinstance(node, LogicalOp): self.visit_LogicalOp(node)
         elif isinstance(node, UnaryOp): self.visit_UnaryOp(node)
+        elif isinstance(node, Expr): self.visit_Expr(node)
         elif isinstance(node, Assign): self.visit_Assign(node)
         elif isinstance(node, AugAssign): self.visit_AugAssign(node) 
         elif isinstance(node, If): self.visit_If(node)
         elif isinstance(node, While): self.visit_While(node)
+        elif isinstance(node, For): self.visit_For(node)
         elif isinstance(node, FunctionDef): self.visit_FunctionDef(node)
         elif isinstance(node, Call): self.visit_Call(node)
         elif isinstance(node, Return): self.visit_Return(node)
@@ -138,6 +140,28 @@ class Compiler:
             self.visit(stmt)
         self.emit(Op.JUMP, start_idx)
         self.instructions[jump_idx].arg = len(self.instructions)
+        
+    def visit_Expr(self, node: Expr):
+        self.visit(node.value)
+        self.emit(Op.POP_TOP)
+
+    def visit_For(self, node: For):
+        self.visit(node.iter)
+        self.emit(Op.GET_ITER)
+        
+        start_idx = len(self.instructions)
+        jump_end_idx = self.emit(Op.FOR_ITER)
+        
+        if isinstance(node.target, Name):
+            self.emit(Op.STORE_NAME, node.target.value)
+        else:
+            raise SyntaxError("Only simple variable names are currently supported in for loops")
+            
+        for stmt in node.body:
+            self.visit(stmt)
+            
+        self.emit(Op.JUMP, start_idx)
+        self.instructions[jump_end_idx].arg = len(self.instructions)
 
     def visit_FunctionDef(self, node: FunctionDef):
         func_comp = Compiler()
