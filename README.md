@@ -1,4 +1,4 @@
-# PyLite Lang 🚀
+# PyLite🚀
 
 > A lightweight Python-inspired programming language, bytecode compiler, virtual machine, runtime, and desktop IDE built from scratch in Python.
 
