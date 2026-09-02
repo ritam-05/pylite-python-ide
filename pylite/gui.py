@@ -1,10 +1,10 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-import io
-import contextlib
 import traceback
 import os
 import datetime
+import threading  # ADDED
+import queue      # ADDED
 
 from pylite.lexer import Lexer
 from pylite.parser import Parser
@@ -15,20 +15,12 @@ BASE_DARK = "#1e1e1e"
 
 THEMES = {
     "dark": {
-        "bg": "#2b2b2b",
-        "fg": "#a9b7c6",
-        "insert": "white",
-        "console_bg": "#141414",
-        "console_fg": "#6a8759", 
-        "error_fg": "#cc6666"    
+        "bg": "#2b2b2b", "fg": "#a9b7c6", "insert": "white",
+        "console_bg": "#141414", "console_fg": "#6a8759", "error_fg": "#cc6666"    
     },
     "light": {
-        "bg": "#ffffff",
-        "fg": "#000000",
-        "insert": "black",
-        "console_bg": "#f5f5f5",
-        "console_fg": "#006600",
-        "error_fg": "#d12424"
+        "bg": "#ffffff", "fg": "#000000", "insert": "black",
+        "console_bg": "#f5f5f5", "console_fg": "#006600", "error_fg": "#d12424"
     }
 }
 
@@ -42,12 +34,18 @@ class PyLiteIDE:
         self.current_theme = "dark"
         self.current_file = None
         
+        # ADDED: Threading & Execution State
+        self.output_queue = queue.Queue()
+        self.is_running = False
+        self.active_vm = None
+        
         self.update_title()
         self._build_menu()
         self._build_ui()
         self.apply_theme()
         
         self._auto_save_loop()
+        self._poll_output_queue() # ADDED
 
     def update_title(self):
         title = "PyLite IDE"
@@ -60,10 +58,8 @@ class PyLiteIDE:
     def _build_menu(self):
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
-        
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
-        
         file_menu.add_command(label="New", command=self.new_file, accelerator="Ctrl+N")
         file_menu.add_command(label="Open...", command=self.open_file, accelerator="Ctrl+O")
         file_menu.add_command(label="Save", command=self.save_file, accelerator="Ctrl+S")
@@ -85,8 +81,12 @@ class PyLiteIDE:
             "font": ("Consolas", 10), "cursor": "hand2"
         }
         
-        btn_run = tk.Button(toolbar, text="▶ Run (F5)", command=self.execute_code, **btn_style)
-        btn_run.pack(side=tk.LEFT, padx=5)
+        self.btn_run = tk.Button(toolbar, text="▶ Run (F5)", command=self.execute_code, **btn_style)
+        self.btn_run.pack(side=tk.LEFT, padx=5)
+        
+        # ADDED: Stop Button
+        self.btn_stop = tk.Button(toolbar, text="■ Stop", command=self.stop_execution, state=tk.DISABLED, **btn_style)
+        self.btn_stop.pack(side=tk.LEFT, padx=5)
         
         btn_clear = tk.Button(toolbar, text="Clear Console", command=self.clear_console, **btn_style)
         btn_clear.pack(side=tk.LEFT, padx=5)
@@ -110,26 +110,18 @@ class PyLiteIDE:
         
         self.root.bind("<F5>", lambda event: self.execute_code())
         
-        # MODIFIED: Clean, simple boilerplate text
-        sample_code = """# Welcome to PyLite IDE!
-print("Hello from the EXE!")
-"""
+        sample_code = """i = 1\nwhile i < 10:\n    print(i)\n"""
         self.editor.insert("1.0", sample_code)
 
     def toggle_theme(self):
-        if self.current_theme == "dark":
-            self.current_theme = "light"
-            self.btn_theme.config(text="☾ Dark Mode")
-        else:
-            self.current_theme = "dark"
-            self.btn_theme.config(text="☀ Light Mode")
+        self.current_theme = "light" if self.current_theme == "dark" else "dark"
+        self.btn_theme.config(text="☾ Dark Mode" if self.current_theme == "light" else "☀ Light Mode")
         self.apply_theme()
 
     def apply_theme(self):
         colors = THEMES[self.current_theme]
         self.editor.config(bg=colors["bg"], fg=colors["fg"], insertbackground=colors["insert"])
         self.console.config(bg=colors["console_bg"])
-        
         self.console.tag_config("output", foreground=colors["console_fg"])
         self.console.tag_config("error", foreground=colors["error_fg"])
 
@@ -141,15 +133,10 @@ print("Hello from the EXE!")
         self.status_var.set("New file created.")
 
     def open_file(self):
-        filepath = filedialog.askopenfilename(
-            defaultextension=".py",
-            filetypes=[("Python Files", "*.py"), ("All Files", "*.*")]
-        )
+        filepath = filedialog.askopenfilename(defaultextension=".py", filetypes=[("Python Files", "*.py"), ("All Files", "*.*")])
         if not filepath: return
-            
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                content = f.read()
+            with open(filepath, "r", encoding="utf-8") as f: content = f.read()
             self.editor.delete("1.0", tk.END)
             self.editor.insert("1.0", content)
             self.current_file = filepath
@@ -160,55 +147,39 @@ print("Hello from the EXE!")
             messagebox.showerror("Error", f"Failed to open file:\n{e}")
 
     def save_file(self):
-        if not self.current_file:
-            self.save_as_file()
-        else:
-            self._write_to_disk(self.current_file, silent=False)
+        if not self.current_file: self.save_as_file()
+        else: self._write_to_disk(self.current_file, silent=False)
 
     def save_as_file(self):
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".py",
-            filetypes=[("Python Files", "*.py"), ("All Files", "*.*")]
-        )
+        filepath = filedialog.asksaveasfilename(defaultextension=".py", filetypes=[("Python Files", "*.py"), ("All Files", "*.*")])
         if not filepath: return
         self._write_to_disk(filepath, silent=False)
 
     def _write_to_disk(self, filepath, silent=True):
         try:
             content = self.editor.get("1.0", tk.END)
-            if content.endswith("\n"):
-                content = content[:-1]
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(content)
+            if content.endswith("\n"): content = content[:-1]
+            with open(filepath, "w", encoding="utf-8") as f: f.write(content)
             self.current_file = filepath
             self.update_title()
-            
-            time_str = datetime.datetime.now().strftime("%H:%M:%S")
-            self.status_var.set(f"Auto-saved at {time_str}")
-            
-            if not silent:
-                messagebox.showinfo("Success", "File saved successfully!")
+            self.status_var.set(f"Auto-saved at {datetime.datetime.now().strftime('%H:%M:%S')}")
+            if not silent: messagebox.showinfo("Success", "File saved successfully!")
         except Exception as e:
-            if not silent:
-                messagebox.showerror("Error", f"Failed to save file:\n{e}")
+            if not silent: messagebox.showerror("Error", f"Failed to save file:\n{e}")
 
     def _auto_save_loop(self):
-        if self.current_file:
-            self._write_to_disk(self.current_file, silent=True)
+        if self.current_file: self._write_to_disk(self.current_file, silent=True)
         self.root.after(5000, self._auto_save_loop)
 
     def write_console(self, text, is_error=False):
         colors = THEMES[self.current_theme]
         self.console.config(state=tk.NORMAL)
-        
         self.console.tag_config("output", foreground=colors["console_fg"])
         self.console.tag_config("error", foreground=colors["error_fg"])
-        
         if is_error:
             self.console.insert(tk.END, text + "\n", "error")
         else:
             self.console.insert(tk.END, text, "output")
-            
         self.console.see(tk.END)
         self.console.config(state=tk.DISABLED)
 
@@ -217,32 +188,86 @@ print("Hello from the EXE!")
         self.console.delete("1.0", tk.END)
         self.console.config(state=tk.DISABLED)
 
+    # ADDED: GUI Polling loop to fetch messages from the background thread safely
+    def _poll_output_queue(self):
+        output_buffer = []
+        messages_processed = 0
+        finished = False
+
+        # 1. Process a maximum of 1000 messages per tick to prevent GUI starvation
+        while not self.output_queue.empty() and messages_processed < 1000:
+            msg_type, msg = self.output_queue.get_nowait()
+            messages_processed += 1
+            
+            if msg_type == "output":
+                output_buffer.append(msg)
+            elif msg_type == "error":
+                # If an error happens, flush the normal output first
+                if output_buffer:
+                    self.write_console("".join(output_buffer))
+                    output_buffer.clear()
+                self.write_console(msg, is_error=True)
+            elif msg_type == "finish":
+                finished = True
+                break
+
+        # 2. Batch update the Tkinter console (insanely faster than 1000 individual inserts)
+        if output_buffer:
+            self.write_console("".join(output_buffer))
+
+        if finished:
+            self._set_ui_state(running=False)
+
+        # 3. Always reschedule the polling loop
+        self.root.after(50, self._poll_output_queue)
+
+    def _set_ui_state(self, running):
+        self.is_running = running
+        if running:
+            self.btn_run.config(state=tk.DISABLED)
+            self.btn_stop.config(state=tk.NORMAL)
+            self.status_var.set("Running...")
+        else:
+            self.btn_run.config(state=tk.NORMAL)
+            self.btn_stop.config(state=tk.DISABLED)
+            self.status_var.set("Ready")
+            self.active_vm = None
+
+    def stop_execution(self):
+        if self.is_running and self.active_vm:
+            self.active_vm.should_stop = True
+            self.status_var.set("Stopping...")
+
     def execute_code(self):
         code = self.editor.get("1.0", tk.END).strip()
-        if not code: return
+        if not code or self.is_running: return
             
         self.clear_console()
         self.write_console(f">>> Running...\n")
-        output_buffer = io.StringIO()
-        
+        self._set_ui_state(running=True)
+
+        # Start execution in a background thread
+        thread = threading.Thread(target=self._run_vm_thread, args=(code,), daemon=True)
+        thread.start()
+
+    def _run_vm_thread(self, code):
         try:
-            with contextlib.redirect_stdout(output_buffer):
-                lexer = Lexer(code)
-                parser = Parser(lexer.tokenize())
-                ast = parser.parse()
-                
-                compiler = Compiler()
-                main_func = compiler.compile(ast)
-                
-                vm = VM()
-                vm.run(main_func)
-                
-            self.write_console(output_buffer.getvalue())
-            self.write_console("\n>>> Finished successfully.\n")
+            lexer = Lexer(code)
+            parser = Parser(lexer.tokenize())
+            ast = parser.parse()
             
+            compiler = Compiler()
+            main_func = compiler.compile(ast)
+            
+            # Pass a callback that puts text into the thread-safe queue
+            self.active_vm = VM(stdout_write=lambda text: self.output_queue.put(("output", text)))
+            self.active_vm.run(main_func)
+            
+            self.output_queue.put(("finish", None))
         except Exception as e:
             err_msg = traceback.format_exc()
-            self.write_console(err_msg, is_error=True)
+            self.output_queue.put(("error", err_msg))
+            self.output_queue.put(("finish", None))
 
     def run(self):
         self.root.mainloop()

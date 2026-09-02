@@ -26,20 +26,39 @@ class BoundMethod:
         pass # VM handles this directly
 
 class VM:
-    def __init__(self):
+    # MODIFIED: Accept a custom stdout writer callback
+    def __init__(self, stdout_write=None):
         self.stack: List[Any] = []
+        self.should_stop = False
+        
+        # Default to standard print if no callback provided
+        self.stdout_write = stdout_write or (lambda text: print(text, end=""))
+
+        # MODIFIED: Custom PyLite print that uses our safe callback
+        def pylite_print(*args):
+            text = " ".join(str(a) for a in args) + "\n"
+            self.stdout_write(text)
+
         self.globals: Dict[str, Any] = {
-            "print": print,
+            "print": pylite_print,
             "len": len,
             "set": set
         }
 
     def run(self, main_func: PyLiteFunction) -> Any:
-        # We abstract the execution loop so we can run __init__ functions synchronously
         return self._execute_loop([CallFrame(main_func, self.globals)])
 
     def _execute_loop(self, frames: List[CallFrame]) -> Any:
+        instruction_count = 0
+        
         while frames:
+            # ADDED: Cooperative cancellation check. 
+            # We check every 100 instructions to balance responsiveness vs performance.
+            instruction_count += 1
+            if instruction_count % 100 == 0 and self.should_stop:
+                self.stdout_write("\n[VM] Execution terminated by user.\n")
+                return None
+                
             frame = frames[-1]
             if frame.ip >= len(frame.func.instructions):
                 frames.pop()
@@ -48,6 +67,7 @@ class VM:
             instr = frame.func.instructions[frame.ip]
             frame.ip += 1
             
+            # ... (KEEP ALL EXISTING OPCODES EXACTLY THE SAME) ...
             if instr.opcode == Op.LOAD_CONST: self.stack.append(instr.arg)
             elif instr.opcode == Op.LOAD_NAME:
                 name = instr.arg
@@ -108,7 +128,6 @@ class VM:
                 idx = self.stack.pop(); obj = self.stack.pop(); val = self.stack.pop()
                 obj[idx] = val
 
-            # --- DSA SPECIFIC OPCODES ---
             elif instr.opcode == Op.MAKE_CLASS:
                 name, methods = instr.arg
                 self.stack.append(PyLiteClass(name, methods))
@@ -123,7 +142,6 @@ class VM:
                     else:
                         raise AttributeError(f"'{obj.cls.name}' object has no attribute '{instr.arg}'")
                 else:
-                    # Native Python object interaction (e.g. deque.append)
                     self.stack.append(getattr(obj, instr.arg))
 
             elif instr.opcode == Op.STORE_ATTR:
@@ -134,10 +152,12 @@ class VM:
                     setattr(obj, instr.arg, val)
 
             elif instr.opcode == Op.IMPORT_NAME:
+                import importlib
                 mod = importlib.import_module(instr.arg)
                 self.stack.append(mod)
 
             elif instr.opcode == Op.IMPORT_FROM:
+                import importlib
                 mod_name, names = instr.arg
                 mod = importlib.import_module(mod_name)
                 for name in names:
@@ -149,13 +169,11 @@ class VM:
                 func = self.stack.pop()
                 
                 if isinstance(func, PyLiteClass):
-                    # Instantiation
                     inst = PyLiteInstance(func)
-                    self.stack.append(inst) # Push result
+                    self.stack.append(inst) 
                     if "__init__" in func.methods:
                         init_m = func.methods["__init__"]
                         env = dict(zip(init_m.params, [inst] + args))
-                        # Run __init__ cleanly in a sub-loop
                         self._execute_loop([CallFrame(init_m, env)])
                         
                 elif isinstance(func, BoundMethod):
