@@ -9,6 +9,10 @@ class Op(Enum):
     ADD           = auto()
     SUB           = auto()
     MUL           = auto()
+    DIV           = auto() # ADDED
+    FLOORDIV      = auto() # ADDED
+    MOD           = auto() # ADDED
+    POW           = auto() # ADDED
     CMP_EQ        = auto()
     CMP_NEQ       = auto()
     CMP_LT        = auto()
@@ -22,13 +26,13 @@ class Op(Enum):
     BUILD_DICT    = auto()
     LOAD_INDEX    = auto()
     STORE_INDEX   = auto()
-    
-    # ADDED FOR DSA
     LOAD_ATTR     = auto()
     STORE_ATTR    = auto()
     MAKE_CLASS    = auto()
     IMPORT_NAME   = auto()
     IMPORT_FROM   = auto()
+    DUP_TOP       = auto() # ADDED for Augmented Assignment
+    DUP_TWO       = auto() # ADDED for Augmented Assignment
 
 @dataclass
 class Instruction:

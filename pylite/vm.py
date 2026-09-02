@@ -26,7 +26,6 @@ class BoundMethod:
         pass # VM handles this directly
 
 class VM:
-    # MODIFIED: Accept a custom stdout writer callback
     def __init__(self, stdout_write=None):
         self.stack: List[Any] = []
         self.should_stop = False
@@ -34,7 +33,7 @@ class VM:
         # Default to standard print if no callback provided
         self.stdout_write = stdout_write or (lambda text: print(text, end=""))
 
-        # MODIFIED: Custom PyLite print that uses our safe callback
+        # Custom PyLite print that uses our safe callback
         def pylite_print(*args):
             text = " ".join(str(a) for a in args) + "\n"
             self.stdout_write(text)
@@ -52,8 +51,7 @@ class VM:
         instruction_count = 0
         
         while frames:
-            # ADDED: Cooperative cancellation check. 
-            # We check every 100 instructions to balance responsiveness vs performance.
+            # Cooperative cancellation check
             instruction_count += 1
             if instruction_count % 100 == 0 and self.should_stop:
                 self.stdout_write("\n[VM] Execution terminated by user.\n")
@@ -67,7 +65,6 @@ class VM:
             instr = frame.func.instructions[frame.ip]
             frame.ip += 1
             
-            # ... (KEEP ALL EXISTING OPCODES EXACTLY THE SAME) ...
             if instr.opcode == Op.LOAD_CONST: self.stack.append(instr.arg)
             elif instr.opcode == Op.LOAD_NAME:
                 name = instr.arg
@@ -77,6 +74,7 @@ class VM:
             elif instr.opcode == Op.STORE_NAME:
                 frame.env[instr.arg] = self.stack.pop()
                 
+            # --- ARITHMETIC OPCODES ---
             elif instr.opcode == Op.ADD:
                 b = self.stack.pop(); a = self.stack.pop()
                 self.stack.append(a + b)
@@ -86,7 +84,26 @@ class VM:
             elif instr.opcode == Op.MUL:
                 b = self.stack.pop(); a = self.stack.pop()
                 self.stack.append(a * b)
+            elif instr.opcode == Op.DIV:
+                b = self.stack.pop(); a = self.stack.pop()
+                self.stack.append(a / b)
+            elif instr.opcode == Op.FLOORDIV:
+                b = self.stack.pop(); a = self.stack.pop()
+                self.stack.append(a // b)
+            elif instr.opcode == Op.MOD:
+                b = self.stack.pop(); a = self.stack.pop()
+                self.stack.append(a % b)
+            elif instr.opcode == Op.POW:
+                b = self.stack.pop(); a = self.stack.pop()
+                self.stack.append(a ** b)
                 
+            # --- STACK MANIPULATION FOR AUGMENTED ASSIGNMENTS ---
+            elif instr.opcode == Op.DUP_TOP:
+                self.stack.append(self.stack[-1])
+            elif instr.opcode == Op.DUP_TWO:
+                self.stack.extend(self.stack[-2:])
+
+            # --- COMPARISON AND CONTROL FLOW ---
             elif instr.opcode == Op.CMP_EQ:
                 b = self.stack.pop(); a = self.stack.pop()
                 self.stack.append(a == b)
@@ -105,6 +122,7 @@ class VM:
             elif instr.opcode == Op.JUMP:
                 frame.ip = instr.arg
                 
+            # --- STRUCTURES AND OOP ---
             elif instr.opcode == Op.MAKE_FUNCTION:
                 self.stack.append(instr.arg)
                 
@@ -151,13 +169,12 @@ class VM:
                 else:
                     setattr(obj, instr.arg, val)
 
+            # --- IMPORTS AND CALLS ---
             elif instr.opcode == Op.IMPORT_NAME:
-                import importlib
                 mod = importlib.import_module(instr.arg)
                 self.stack.append(mod)
 
             elif instr.opcode == Op.IMPORT_FROM:
-                import importlib
                 mod_name, names = instr.arg
                 mod = importlib.import_module(mod_name)
                 for name in names:

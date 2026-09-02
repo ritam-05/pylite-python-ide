@@ -120,9 +120,19 @@ class Parser:
 
         expr = self.comparison()
         
-        if self.current_token().type == TokenType.ASSIGN:
-            self.eat(TokenType.ASSIGN)
-            return Assign(target=expr, value=self.comparison())
+        # MODIFIED: Handle Assignment & Augmented Assignment
+        assign_tokens = (TokenType.ASSIGN, TokenType.PLUS_ASSIGN, TokenType.MINUS_ASSIGN,
+                         TokenType.STAR_ASSIGN, TokenType.SLASH_ASSIGN, TokenType.DOUBLE_SLASH_ASSIGN,
+                         TokenType.PERCENT_ASSIGN, TokenType.DOUBLE_STAR_ASSIGN)
+                         
+        if self.current_token().type in assign_tokens:
+            op_token = self.current_token()
+            self.eat(op_token.type)
+            value = self.comparison()
+            if op_token.type == TokenType.ASSIGN:
+                return Assign(target=expr, value=value)
+            else:
+                return AugAssign(target=expr, op=op_token.value, value=value)
             
         return expr
 
@@ -143,10 +153,21 @@ class Parser:
         return node
 
     def term(self) -> ASTNode:
+        node = self.power()
+        # MODIFIED: Added /, //, and %
+        while self.current_token().type in (TokenType.STAR, TokenType.SLASH, TokenType.DOUBLE_SLASH, TokenType.PERCENT):
+            op = self.current_token().value
+            self.eat(self.current_token().type)
+            node = BinOp(left=node, op=op, right=self.power())
+        return node
+
+    # ADDED: Handle Exponents
+    def power(self) -> ASTNode:
         node = self.factor()
-        while self.current_token().type == TokenType.STAR:
-            self.eat(TokenType.STAR)
-            node = BinOp(left=node, op='*', right=self.factor())
+        if self.current_token().type == TokenType.DOUBLE_STAR:
+            op = self.current_token().value
+            self.eat(TokenType.DOUBLE_STAR)
+            node = BinOp(left=node, op=op, right=self.power()) # Right associative
         return node
 
     def factor(self) -> ASTNode:
@@ -154,9 +175,8 @@ class Parser:
         if token.type == TokenType.NUMBER:
             self.eat(TokenType.NUMBER)
             node = Number(value=int(token.value))
-        elif token.type == TokenType.STRING:  # ADDED
+        elif token.type == TokenType.STRING:
             self.eat(TokenType.STRING)
-            # Remove the surrounding quotes (e.g., "hello" -> hello)
             node = String(value=token.value[1:-1])
         elif token.type == TokenType.TRUE:
             self.eat(TokenType.TRUE)

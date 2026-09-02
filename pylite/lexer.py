@@ -6,7 +6,7 @@ from typing import List
 class TokenType(Enum):
     IDENTIFIER = auto()
     NUMBER     = auto()
-    STRING     = auto()  # ADDED: To support text in quotes
+    STRING     = auto()
     TRUE       = auto()
     FALSE      = auto()
     IF         = auto()
@@ -17,9 +17,20 @@ class TokenType(Enum):
     IMPORT     = auto()
     FROM       = auto()
     ASSIGN     = auto()
+    PLUS_ASSIGN = auto()
+    MINUS_ASSIGN = auto()
+    STAR_ASSIGN = auto()
+    SLASH_ASSIGN = auto()
+    DOUBLE_SLASH_ASSIGN = auto()
+    PERCENT_ASSIGN = auto()
+    DOUBLE_STAR_ASSIGN = auto()
     PLUS       = auto()
     MINUS      = auto()
     STAR       = auto()
+    SLASH      = auto()
+    DOUBLE_SLASH = auto()
+    PERCENT    = auto()
+    DOUBLE_STAR= auto()
     EQ         = auto()
     NEQ        = auto()
     LT         = auto()
@@ -58,9 +69,19 @@ class Lexer:
         'from': TokenType.FROM
     }
 
+    # ORDER IS CRITICAL: Match longer tokens before shorter ones!
     RULES = [
         ('NUMBER',     r'\d+'),
-        ('STRING',     r'"[^"]*"|\'[^\']*\''),  # ADDED: Matches "text" or 'text'
+        ('STRING',     r'"[^"]*"|\'[^\']*\''),
+        ('DOUBLE_SLASH_ASSIGN', r'//='),
+        ('DOUBLE_STAR_ASSIGN',  r'\*\*='),
+        ('PLUS_ASSIGN',         r'\+='),
+        ('MINUS_ASSIGN',        r'-='),
+        ('STAR_ASSIGN',         r'\*='),
+        ('SLASH_ASSIGN',        r'/='),
+        ('PERCENT_ASSIGN',      r'%='),
+        ('DOUBLE_SLASH',        r'//'),
+        ('DOUBLE_STAR',         r'\*\*'),
         ('EQ',         r'=='),
         ('NEQ',        r'!='),
         ('ASSIGN',     r'='),
@@ -70,6 +91,8 @@ class Lexer:
         ('PLUS',       r'\+'),
         ('MINUS',      r'-'),
         ('STAR',       r'\*'),
+        ('SLASH',      r'/'),
+        ('PERCENT',    r'%'),
         ('LPAREN',     r'\('),
         ('RPAREN',     r'\)'),
         ('LBRACKET',   r'\['),

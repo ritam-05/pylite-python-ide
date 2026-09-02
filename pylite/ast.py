@@ -8,13 +8,15 @@ class Number(ASTNode): value: int
 @dataclass
 class Boolean(ASTNode): value: bool
 @dataclass
-class String(ASTNode): value: str   # ADDED
+class String(ASTNode): value: str
 @dataclass
 class Name(ASTNode): value: str
 @dataclass
 class BinOp(ASTNode): left: ASTNode; op: str; right: ASTNode
 @dataclass
 class Assign(ASTNode): target: ASTNode; value: ASTNode
+@dataclass
+class AugAssign(ASTNode): target: ASTNode; op: str; value: ASTNode # ADDED
 @dataclass
 class Call(ASTNode): func: ASTNode; args: List[ASTNode]
 @dataclass

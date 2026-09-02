@@ -21,10 +21,11 @@ class Compiler:
     def visit(self, node: ASTNode):
         if isinstance(node, Number): self.emit(Op.LOAD_CONST, node.value)
         elif isinstance(node, Boolean): self.emit(Op.LOAD_CONST, node.value)
-        elif isinstance(node, String): self.emit(Op.LOAD_CONST, node.value) # ADDED
+        elif isinstance(node, String): self.emit(Op.LOAD_CONST, node.value)
         elif isinstance(node, Name): self.emit(Op.LOAD_NAME, node.value)
         elif isinstance(node, BinOp): self.visit_BinOp(node)
         elif isinstance(node, Assign): self.visit_Assign(node)
+        elif isinstance(node, AugAssign): self.visit_AugAssign(node) # ADDED
         elif isinstance(node, If): self.visit_If(node)
         elif isinstance(node, While): self.visit_While(node)
         elif isinstance(node, FunctionDef): self.visit_FunctionDef(node)
@@ -40,11 +41,21 @@ class Compiler:
         else:
             raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
 
+    # ADDED: Unified binary operation emitter
+    def _emit_binop(self, op: str):
+        if op == '+': self.emit(Op.ADD)
+        elif op == '-': self.emit(Op.SUB)
+        elif op == '*': self.emit(Op.MUL)
+        elif op == '/': self.emit(Op.DIV)
+        elif op == '//': self.emit(Op.FLOORDIV)
+        elif op == '%': self.emit(Op.MOD)
+        elif op == '**': self.emit(Op.POW)
+        else: raise NotImplementedError(f"Unknown binop {op}")
+
     def visit_BinOp(self, node: BinOp):
         self.visit(node.left); self.visit(node.right)
-        if node.op == '+': self.emit(Op.ADD)
-        elif node.op == '-': self.emit(Op.SUB)
-        elif node.op == '*': self.emit(Op.MUL)
+        if node.op in ('+', '-', '*', '/', '//', '%', '**'):
+            self._emit_binop(node.op)
         elif node.op == '==': self.emit(Op.CMP_EQ)
         elif node.op == '!=': self.emit(Op.CMP_NEQ)
         elif node.op == '<': self.emit(Op.CMP_LT)
@@ -61,6 +72,35 @@ class Compiler:
         elif isinstance(node.target, Attribute):
             self.visit(node.target.obj)
             self.emit(Op.STORE_ATTR, node.target.attr)
+
+    # ADDED: Safely evaluate a target once using DUP instructions
+    def visit_AugAssign(self, node: AugAssign):
+        base_op = node.op[:-1] # Extracts '+' from '+='
+        
+        if isinstance(node.target, Name):
+            self.emit(Op.LOAD_NAME, node.target.value)
+            self.visit(node.value)
+            self._emit_binop(base_op)
+            self.emit(Op.STORE_NAME, node.target.value)
+            
+        elif isinstance(node.target, Subscript):
+            self.visit(node.target.obj)
+            self.visit(node.target.index)
+            self.emit(Op.DUP_TWO)       # [obj, idx] -> [obj, idx, obj, idx]
+            self.emit(Op.LOAD_INDEX)    # [obj, idx, obj[idx]]
+            self.visit(node.value)      # [obj, idx, obj[idx], val]
+            self._emit_binop(base_op)   # [obj, idx, result]
+            self.emit(Op.STORE_INDEX)   # Stores result to obj[idx]
+            
+        elif isinstance(node.target, Attribute):
+            self.visit(node.target.obj)
+            self.emit(Op.DUP_TOP)       # [obj] -> [obj, obj]
+            self.emit(Op.LOAD_ATTR, node.target.attr) # [obj, obj.attr]
+            self.visit(node.value)      # [obj, obj.attr, val]
+            self._emit_binop(base_op)   # [obj, result]
+            self.emit(Op.STORE_ATTR, node.target.attr) # Stores result to obj.attr
+        else:
+            raise SyntaxError("Invalid target for augmented assignment")
 
     def visit_If(self, node: If):
         self.visit(node.condition)
