@@ -104,9 +104,22 @@ class Compiler:
 
     def visit_If(self, node: If):
         self.visit(node.condition)
-        jump_idx = self.emit(Op.JUMP_IF_FALSE)
+        jump_if_false_idx = self.emit(Op.JUMP_IF_FALSE)
+        
         for stmt in node.body: self.visit(stmt)
-        self.instructions[jump_idx].arg = len(self.instructions)
+        
+        # MODIFIED: Handle the alternative branch jump patching
+        if node.orelse:
+            jump_end_idx = self.emit(Op.JUMP)
+            # Patch the first jump to land at the start of the else block
+            self.instructions[jump_if_false_idx].arg = len(self.instructions)
+            
+            for stmt in node.orelse: self.visit(stmt)
+            # Patch the second jump to land at the end of the else block
+            self.instructions[jump_end_idx].arg = len(self.instructions)
+        else:
+            # If no else, jump past the if body
+            self.instructions[jump_if_false_idx].arg = len(self.instructions)
 
     def visit_While(self, node: While):
         start_idx = len(self.instructions)

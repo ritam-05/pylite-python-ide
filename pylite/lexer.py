@@ -10,6 +10,7 @@ class TokenType(Enum):
     TRUE       = auto()
     FALSE      = auto()
     IF         = auto()
+    ELSE       = auto() # ADDED
     WHILE      = auto()
     DEF        = auto()
     RETURN     = auto()
@@ -61,6 +62,7 @@ class Lexer:
         'True': TokenType.TRUE,
         'False': TokenType.FALSE,
         'if': TokenType.IF,
+        'else': TokenType.ELSE, # ADDED
         'while': TokenType.WHILE,
         'def': TokenType.DEF,
         'return': TokenType.RETURN,
@@ -69,7 +71,7 @@ class Lexer:
         'from': TokenType.FROM
     }
 
-    # ORDER IS CRITICAL: Match longer tokens before shorter ones!
+    # ... (KEEP ALL RULES AND THE REST OF LEXER CLASS EXACTLY THE SAME) ...
     RULES = [
         ('NUMBER',     r'\d+'),
         ('STRING',     r'"[^"]*"|\'[^\']*\''),

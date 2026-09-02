@@ -16,11 +16,14 @@ class BinOp(ASTNode): left: ASTNode; op: str; right: ASTNode
 @dataclass
 class Assign(ASTNode): target: ASTNode; value: ASTNode
 @dataclass
-class AugAssign(ASTNode): target: ASTNode; op: str; value: ASTNode # ADDED
+class AugAssign(ASTNode): target: ASTNode; op: str; value: ASTNode
 @dataclass
 class Call(ASTNode): func: ASTNode; args: List[ASTNode]
+
+# MODIFIED: If node now accepts the alternative branch
 @dataclass
-class If(ASTNode): condition: ASTNode; body: List[ASTNode]
+class If(ASTNode): condition: ASTNode; body: List[ASTNode]; orelse: List[ASTNode] = None
+
 @dataclass
 class While(ASTNode): condition: ASTNode; body: List[ASTNode]
 @dataclass

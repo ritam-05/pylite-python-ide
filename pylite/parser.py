@@ -94,15 +94,38 @@ class Parser:
             self.eat(TokenType.IF)
             condition = self.comparison()
             self.eat(TokenType.COLON)
+            
             while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
             self.eat(TokenType.INDENT)
+            
             body = []
             while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
                 if self.current_token().type == TokenType.NEWLINE:
                     self.eat(TokenType.NEWLINE); continue
                 body.append(self.statement())
+                
             if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
-            return If(condition=condition, body=body)
+            
+            # SAFEGUARD: Consume any trailing newlines/blank lines before checking for else
+            while self.current_token().type == TokenType.NEWLINE:
+                self.eat(TokenType.NEWLINE)
+                
+            orelse = []
+            if self.current_token().type == TokenType.ELSE:
+                self.eat(TokenType.ELSE)
+                self.eat(TokenType.COLON)
+                
+                while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+                self.eat(TokenType.INDENT)
+                
+                while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
+                    if self.current_token().type == TokenType.NEWLINE:
+                        self.eat(TokenType.NEWLINE); continue
+                    orelse.append(self.statement())
+                    
+                if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
+                
+            return If(condition=condition, body=body, orelse=orelse)
 
         if self.current_token().type == TokenType.WHILE:
             self.eat(TokenType.WHILE)
@@ -120,7 +143,6 @@ class Parser:
 
         expr = self.comparison()
         
-        # MODIFIED: Handle Assignment & Augmented Assignment
         assign_tokens = (TokenType.ASSIGN, TokenType.PLUS_ASSIGN, TokenType.MINUS_ASSIGN,
                          TokenType.STAR_ASSIGN, TokenType.SLASH_ASSIGN, TokenType.DOUBLE_SLASH_ASSIGN,
                          TokenType.PERCENT_ASSIGN, TokenType.DOUBLE_STAR_ASSIGN)
@@ -154,20 +176,18 @@ class Parser:
 
     def term(self) -> ASTNode:
         node = self.power()
-        # MODIFIED: Added /, //, and %
         while self.current_token().type in (TokenType.STAR, TokenType.SLASH, TokenType.DOUBLE_SLASH, TokenType.PERCENT):
             op = self.current_token().value
             self.eat(self.current_token().type)
             node = BinOp(left=node, op=op, right=self.power())
         return node
 
-    # ADDED: Handle Exponents
     def power(self) -> ASTNode:
         node = self.factor()
         if self.current_token().type == TokenType.DOUBLE_STAR:
             op = self.current_token().value
             self.eat(TokenType.DOUBLE_STAR)
-            node = BinOp(left=node, op=op, right=self.power()) # Right associative
+            node = BinOp(left=node, op=op, right=self.power()) 
         return node
 
     def factor(self) -> ASTNode:
@@ -216,7 +236,7 @@ class Parser:
             self.eat(TokenType.RBRACE)
             node = DictLiteral(keys=keys, values=values)
         else:
-            raise SyntaxError(f"Unexpected token: {token.type.name}")
+            raise SyntaxError(f"Unexpected token: {token.type.name} at line {token.line}")
 
         while self.current_token().type in (TokenType.LPAREN, TokenType.LBRACKET, TokenType.DOT):
             if self.current_token().type == TokenType.LPAREN:
