@@ -289,7 +289,8 @@ print("Hello from the EXE!")
     def _run_vm_thread(self, code):
         try:
             lexer = Lexer(code)
-            parser = Parser(lexer.tokenize())
+            tokens = lexer.tokenize()
+            parser = Parser(tokens)
             ast = parser.parse()
             
             compiler = Compiler()
@@ -300,7 +301,17 @@ print("Hello from the EXE!")
             
             self.output_queue.put(("finish", None))
         except Exception as e:
-            err_msg = traceback.format_exc()
+            from pylite.errors import PyLiteError
+            if isinstance(e, PyLiteError):
+                err_msg = str(e)
+            else:
+                # Fallback formatter extracting line info if available
+                line = getattr(e, 'line', 1)
+                col = getattr(e, 'column', 1)
+                err_type = type(e).__name__
+                pylite_err = PyLiteError(err_type, str(e), line=line, column=col, filename=self.current_file or "main.py", source_code=code)
+                err_msg = str(pylite_err)
+                
             self.output_queue.put(("error", err_msg))
             self.output_queue.put(("finish", None))
 
