@@ -89,7 +89,6 @@ class Parser:
             self.eat(TokenType.RETURN)
             return Return(value=self.expression())
 
-        # MODIFIED: Robust handling of if, elif, and else chaining
         if self.current_token().type == TokenType.IF:
             self.eat(TokenType.IF)
             condition = self.expression()
@@ -110,7 +109,6 @@ class Parser:
             orelse = []
             current_orelse_list = orelse
             
-            # ELIF Chaining
             while self.current_token().type == TokenType.ELIF:
                 self.eat(TokenType.ELIF)
                 elif_cond = self.expression()
@@ -132,7 +130,6 @@ class Parser:
                 current_orelse_list.append(new_if)
                 current_orelse_list = new_if.orelse
 
-            # Final ELSE
             if self.current_token().type == TokenType.ELSE:
                 self.eat(TokenType.ELSE)
                 self.eat(TokenType.COLON)
@@ -162,9 +159,10 @@ class Parser:
                 body.append(self.statement())
             if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
             return While(condition=condition, body=body)
+
         if self.current_token().type == TokenType.FOR:
             self.eat(TokenType.FOR)
-            target = self.expression() # Typically a Name node
+            target = self.expression()
             self.eat(TokenType.IN)
             iter_node = self.expression()
             self.eat(TokenType.COLON)
@@ -196,11 +194,9 @@ class Parser:
             
         return Expr(value=expr)
 
-    # ADDED: Master Expression Entry Point
     def expression(self) -> ASTNode:
         return self.logic_or()
 
-    # ADDED: Logical OR precedence
     def logic_or(self) -> ASTNode:
         node = self.logic_and()
         while self.current_token().type == TokenType.OR:
@@ -209,7 +205,6 @@ class Parser:
             node = LogicalOp(left=node, op=op, right=self.logic_and())
         return node
 
-    # ADDED: Logical AND precedence
     def logic_and(self) -> ASTNode:
         node = self.logic_not()
         while self.current_token().type == TokenType.AND:
@@ -218,7 +213,6 @@ class Parser:
             node = LogicalOp(left=node, op=op, right=self.logic_not())
         return node
 
-    # ADDED: Logical NOT precedence
     def logic_not(self) -> ASTNode:
         if self.current_token().type == TokenType.NOT:
             op = self.current_token().value
@@ -243,26 +237,33 @@ class Parser:
         return node
 
     def term(self) -> ASTNode:
-        node = self.power()
+        node = self.unary() # MODIFIED: term now defers to unary
         while self.current_token().type in (TokenType.STAR, TokenType.SLASH, TokenType.DOUBLE_SLASH, TokenType.PERCENT):
             op = self.current_token().value
             self.eat(self.current_token().type)
-            node = BinOp(left=node, op=op, right=self.power())
+            node = BinOp(left=node, op=op, right=self.unary())
         return node
+
+    # ADDED: Handle Unary Minus and Plus
+    def unary(self) -> ASTNode:
+        if self.current_token().type in (TokenType.PLUS, TokenType.MINUS):
+            op = self.current_token().value
+            self.eat(self.current_token().type)
+            return UnaryOp(op=op, operand=self.unary())
+        return self.power()
 
     def power(self) -> ASTNode:
         node = self.factor()
         if self.current_token().type == TokenType.DOUBLE_STAR:
             op = self.current_token().value
             self.eat(TokenType.DOUBLE_STAR)
-            node = BinOp(left=node, op=op, right=self.power()) 
+            node = BinOp(left=node, op=op, right=self.unary()) 
         return node
 
     def factor(self) -> ASTNode:
         token = self.current_token()
         if token.type == TokenType.NUMBER:
             self.eat(TokenType.NUMBER)
-            # MODIFIED: Float casting
             val = float(token.value) if '.' in token.value else int(token.value)
             node = Number(value=val)
         elif token.type == TokenType.STRING:
@@ -283,14 +284,39 @@ class Parser:
             self.eat(TokenType.RPAREN)
         elif token.type == TokenType.LBRACKET:
             self.eat(TokenType.LBRACKET)
-            elements = []
-            if self.current_token().type != TokenType.RBRACKET:
-                elements.append(self.expression())
-                while self.current_token().type == TokenType.COMMA:
-                    self.eat(TokenType.COMMA)
-                    elements.append(self.expression())
+            
+            lower = None
+            upper = None
+            step = None
+            is_slice = False
+            
+            if self.current_token().type != TokenType.COLON and self.current_token().type != TokenType.RBRACKET:
+                lower = self.expression()
+                
+            if self.current_token().type == TokenType.COLON:
+                is_slice = True
+                self.eat(TokenType.COLON)
+                if self.current_token().type not in (TokenType.RBRACKET, TokenType.COLON):
+                    upper = self.expression()
+                if self.current_token().type == TokenType.COLON:
+                    self.eat(TokenType.COLON)
+                    if self.current_token().type != TokenType.RBRACKET:
+                        step = self.expression()
+            
             self.eat(TokenType.RBRACKET)
-            node = ListLiteral(elements=elements)
+            
+            if is_slice:
+                node = Subscript(obj=node, index=Slice(lower=lower, upper=upper, step=step))
+            else:
+                if lower is None:
+                    elements = []
+                else:
+                    elements = [lower]
+                    while self.current_token().type == TokenType.COMMA:
+                        self.eat(TokenType.COMMA)
+                        elements.append(self.expression())
+                node = ListLiteral(elements=elements)
+            
         elif token.type == TokenType.LBRACE:
             self.eat(TokenType.LBRACE)
             keys = []; values = []
@@ -322,9 +348,31 @@ class Parser:
                 
             elif self.current_token().type == TokenType.LBRACKET:
                 self.eat(TokenType.LBRACKET)
-                index = self.expression()
+                
+                lower = None
+                upper = None
+                step = None
+                is_slice = False
+                
+                if self.current_token().type != TokenType.COLON:
+                    lower = self.expression()
+                    
+                if self.current_token().type == TokenType.COLON:
+                    is_slice = True
+                    self.eat(TokenType.COLON)
+                    if self.current_token().type not in (TokenType.RBRACKET, TokenType.COLON):
+                        upper = self.expression()
+                    if self.current_token().type == TokenType.COLON:
+                        self.eat(TokenType.COLON)
+                        if self.current_token().type != TokenType.RBRACKET:
+                            step = self.expression()
+                
                 self.eat(TokenType.RBRACKET)
-                node = Subscript(obj=node, index=index)
+                
+                if is_slice:
+                    node = Subscript(obj=node, index=Slice(lower=lower, upper=upper, step=step))
+                else:
+                    node = Subscript(obj=node, index=lower)
                 
             elif self.current_token().type == TokenType.DOT:
                 self.eat(TokenType.DOT)

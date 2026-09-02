@@ -42,6 +42,7 @@ class VM:
             "print": pylite_print,
             "len": len,
             "set": set,
+            "list": list, # Added for good measure
             "range": range
         }
 
@@ -105,8 +106,14 @@ class VM:
                 self.stack.extend(self.stack[-2:])
             elif instr.opcode == Op.POP_TOP:
                 self.stack.pop()
+                
+            # --- UNARY OPCODES ---
             elif instr.opcode == Op.UNARY_NOT:
                 self.stack.append(not self.stack.pop())
+            elif instr.opcode == Op.UNARY_NEGATIVE: # MODIFIED
+                self.stack.append(-self.stack.pop())
+            elif instr.opcode == Op.UNARY_POSITIVE: # MODIFIED
+                self.stack.append(+self.stack.pop())
 
             # --- COMPARISON AND CONTROL FLOW ---
             elif instr.opcode == Op.CMP_EQ:
@@ -141,7 +148,14 @@ class VM:
                 except StopIteration:
                     self.stack.pop()
                     frame.ip = instr.arg
-                
+                    
+            # --- SLICING ---
+            elif instr.opcode == Op.BUILD_SLICE:
+                step = self.stack.pop()
+                upper = self.stack.pop()
+                lower = self.stack.pop()
+                self.stack.append(slice(lower, upper, step))
+
             # --- STRUCTURES AND OOP ---
             elif instr.opcode == Op.MAKE_FUNCTION:
                 self.stack.append(instr.arg)

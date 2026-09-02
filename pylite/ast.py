@@ -28,6 +28,8 @@ class Assign(ASTNode): target: ASTNode; value: ASTNode
 @dataclass
 class AugAssign(ASTNode): target: ASTNode; op: str; value: ASTNode
 @dataclass
+class Slice(ASTNode): lower: ASTNode; upper: ASTNode; step: ASTNode
+@dataclass
 class Call(ASTNode): func: ASTNode; args: List[ASTNode]
 @dataclass
 class If(ASTNode): condition: ASTNode; body: List[ASTNode]; orelse: List[ASTNode] = None

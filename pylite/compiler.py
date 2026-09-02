@@ -48,20 +48,23 @@ class Compiler:
         elif isinstance(node, ListLiteral): self.visit_ListLiteral(node)
         elif isinstance(node, DictLiteral): self.visit_DictLiteral(node)
         elif isinstance(node, Subscript): self.visit_Subscript(node)
+        elif isinstance(node, Slice): self.visit_Slice(node)
         elif isinstance(node, ClassDef): self.visit_ClassDef(node)
         elif isinstance(node, Attribute): self.visit_Attribute(node)
         elif isinstance(node, Import): self.visit_Import(node)
         elif isinstance(node, ImportFrom): self.visit_ImportFrom(node)
         else: raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
 
+    def visit_Expr(self, node: Expr):
+        self.visit(node.value)
+        self.emit(Op.POP_TOP)
+
     def visit_LogicalOp(self, node: LogicalOp):
         self.visit(node.left)
         self.emit(Op.DUP_TOP)
         
-        if node.op == 'and':
-            jump_idx = self.emit(Op.JUMP_IF_FALSE)
-        else:
-            jump_idx = self.emit(Op.JUMP_IF_TRUE)
+        if node.op == 'and': jump_idx = self.emit(Op.JUMP_IF_FALSE)
+        else: jump_idx = self.emit(Op.JUMP_IF_TRUE)
             
         self.emit(Op.POP_TOP)
         self.visit(node.right)
@@ -71,6 +74,10 @@ class Compiler:
         self.visit(node.operand)
         if node.op == 'not':
             self.emit(Op.UNARY_NOT)
+        elif node.op == '-':
+            self.emit(Op.UNARY_NEGATIVE) # MODIFIED
+        elif node.op == '+':
+            self.emit(Op.UNARY_POSITIVE) # MODIFIED
 
     def visit_BinOp(self, node: BinOp):
         self.visit(node.left)
@@ -140,10 +147,6 @@ class Compiler:
             self.visit(stmt)
         self.emit(Op.JUMP, start_idx)
         self.instructions[jump_idx].arg = len(self.instructions)
-        
-    def visit_Expr(self, node: Expr):
-        self.visit(node.value)
-        self.emit(Op.POP_TOP)
 
     def visit_For(self, node: For):
         self.visit(node.iter)
@@ -199,6 +202,18 @@ class Compiler:
         self.visit(node.obj)
         self.visit(node.index)
         self.emit(Op.LOAD_INDEX)
+
+    def visit_Slice(self, node: Slice):
+        if node.lower: self.visit(node.lower)
+        else: self.emit(Op.LOAD_CONST, None)
+        
+        if node.upper: self.visit(node.upper)
+        else: self.emit(Op.LOAD_CONST, None)
+        
+        if node.step: self.visit(node.step)
+        else: self.emit(Op.LOAD_CONST, None)
+        
+        self.emit(Op.BUILD_SLICE)
 
     def visit_ClassDef(self, node: ClassDef):
         methods = {}
