@@ -1,10 +1,12 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+import io
+import contextlib
 import traceback
 import os
 import datetime
-import threading  # ADDED
-import queue      # ADDED
+import threading
+import queue
 
 from pylite.lexer import Lexer
 from pylite.parser import Parser
@@ -34,7 +36,6 @@ class PyLiteIDE:
         self.current_theme = "dark"
         self.current_file = None
         
-        # ADDED: Threading & Execution State
         self.output_queue = queue.Queue()
         self.is_running = False
         self.active_vm = None
@@ -45,7 +46,7 @@ class PyLiteIDE:
         self.apply_theme()
         
         self._auto_save_loop()
-        self._poll_output_queue() # ADDED
+        self._poll_output_queue()
 
     def update_title(self):
         title = "PyLite IDE"
@@ -84,7 +85,6 @@ class PyLiteIDE:
         self.btn_run = tk.Button(toolbar, text="▶ Run (F5)", command=self.execute_code, **btn_style)
         self.btn_run.pack(side=tk.LEFT, padx=5)
         
-        # ADDED: Stop Button
         self.btn_stop = tk.Button(toolbar, text="■ Stop", command=self.stop_execution, state=tk.DISABLED, **btn_style)
         self.btn_stop.pack(side=tk.LEFT, padx=5)
         
@@ -100,6 +100,9 @@ class PyLiteIDE:
         self.editor = tk.Text(paned, font=self.font, undo=True, padx=10, pady=10, borderwidth=0, relief=tk.FLAT)
         paned.add(self.editor, stretch="always", minsize=200)
         
+        # ADDED: Bind the Return (Enter) key to our custom auto-indent handler
+        self.editor.bind("<Return>", self._handle_return)
+        
         self.console = tk.Text(paned, font=self.font, state=tk.DISABLED, padx=10, pady=10, borderwidth=0, relief=tk.FLAT)
         paned.add(self.console, stretch="always", minsize=200)
         
@@ -110,8 +113,47 @@ class PyLiteIDE:
         
         self.root.bind("<F5>", lambda event: self.execute_code())
         
-        sample_code = """i = 1\nwhile i < 10:\n    print(i)\n"""
+        sample_code = """# Welcome to PyLite IDE!
+print("Hello from the EXE!")
+"""
         self.editor.insert("1.0", sample_code)
+
+    # ADDED: The Automatic Indentation Logic
+    def _handle_return(self, event):
+        # Get the cursor's current line
+        cursor_pos = self.editor.index(tk.INSERT)
+        line_num = cursor_pos.split('.')[0]
+        line_text = self.editor.get(f"{line_num}.0", cursor_pos)
+        
+        # 1. Calculate existing indentation
+        indent = ""
+        for char in line_text:
+            if char in " \t":
+                indent += char
+            else:
+                break
+                
+        stripped_line = line_text.strip()
+        
+        # 2. Block Closing (Dedent): If the user hits enter on a line that is ONLY whitespace,
+        # we assume they want to leave the block. We remove 4 spaces of indent.
+        if not stripped_line and indent:
+            self.editor.delete(f"{line_num}.0", cursor_pos)
+            new_indent = indent[:-4] if len(indent) >= 4 else ""
+            self.editor.insert(tk.INSERT, "\n" + new_indent)
+            self.editor.see(tk.INSERT)
+            return "break"
+
+        # 3. Block Opening (Indent): If the line ends with a colon, increase indentation by 4
+        if stripped_line.endswith(":"):
+            indent += "    "
+            
+        # 4. Insert the newline plus the calculated indentation
+        self.editor.insert(tk.INSERT, "\n" + indent)
+        self.editor.see(tk.INSERT)
+        
+        # Return "break" to stop Tkinter from also inserting its own default newline
+        return "break"
 
     def toggle_theme(self):
         self.current_theme = "light" if self.current_theme == "dark" else "dark"
@@ -188,13 +230,11 @@ class PyLiteIDE:
         self.console.delete("1.0", tk.END)
         self.console.config(state=tk.DISABLED)
 
-    # ADDED: GUI Polling loop to fetch messages from the background thread safely
     def _poll_output_queue(self):
         output_buffer = []
         messages_processed = 0
         finished = False
 
-        # 1. Process a maximum of 1000 messages per tick to prevent GUI starvation
         while not self.output_queue.empty() and messages_processed < 1000:
             msg_type, msg = self.output_queue.get_nowait()
             messages_processed += 1
@@ -202,7 +242,6 @@ class PyLiteIDE:
             if msg_type == "output":
                 output_buffer.append(msg)
             elif msg_type == "error":
-                # If an error happens, flush the normal output first
                 if output_buffer:
                     self.write_console("".join(output_buffer))
                     output_buffer.clear()
@@ -211,14 +250,12 @@ class PyLiteIDE:
                 finished = True
                 break
 
-        # 2. Batch update the Tkinter console (insanely faster than 1000 individual inserts)
         if output_buffer:
             self.write_console("".join(output_buffer))
 
         if finished:
             self._set_ui_state(running=False)
 
-        # 3. Always reschedule the polling loop
         self.root.after(50, self._poll_output_queue)
 
     def _set_ui_state(self, running):
@@ -246,7 +283,6 @@ class PyLiteIDE:
         self.write_console(f">>> Running...\n")
         self._set_ui_state(running=True)
 
-        # Start execution in a background thread
         thread = threading.Thread(target=self._run_vm_thread, args=(code,), daemon=True)
         thread.start()
 
@@ -259,7 +295,6 @@ class PyLiteIDE:
             compiler = Compiler()
             main_func = compiler.compile(ast)
             
-            # Pass a callback that puts text into the thread-safe queue
             self.active_vm = VM(stdout_write=lambda text: self.output_queue.put(("output", text)))
             self.active_vm.run(main_func)
             
