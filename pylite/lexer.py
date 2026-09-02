@@ -10,13 +10,17 @@ class TokenType(Enum):
     TRUE       = auto()
     FALSE      = auto()
     IF         = auto()
-    ELSE       = auto() # ADDED
+    ELIF       = auto()
+    ELSE       = auto()
     WHILE      = auto()
     DEF        = auto()
     RETURN     = auto()
     CLASS      = auto()
     IMPORT     = auto()
     FROM       = auto()
+    AND        = auto()
+    OR         = auto()
+    NOT        = auto()
     ASSIGN     = auto()
     PLUS_ASSIGN = auto()
     MINUS_ASSIGN = auto()
@@ -62,18 +66,21 @@ class Lexer:
         'True': TokenType.TRUE,
         'False': TokenType.FALSE,
         'if': TokenType.IF,
-        'else': TokenType.ELSE, # ADDED
+        'elif': TokenType.ELIF,
+        'else': TokenType.ELSE,
         'while': TokenType.WHILE,
         'def': TokenType.DEF,
         'return': TokenType.RETURN,
         'class': TokenType.CLASS,
         'import': TokenType.IMPORT,
-        'from': TokenType.FROM
+        'from': TokenType.FROM,
+        'and': TokenType.AND,
+        'or': TokenType.OR,
+        'not': TokenType.NOT
     }
 
-    # ... (KEEP ALL RULES AND THE REST OF LEXER CLASS EXACTLY THE SAME) ...
     RULES = [
-        ('NUMBER',     r'\d+'),
+        ('NUMBER',     r'\d+\.\d+|\d+'),
         ('STRING',     r'"[^"]*"|\'[^\']*\''),
         ('DOUBLE_SLASH_ASSIGN', r'//='),
         ('DOUBLE_STAR_ASSIGN',  r'\*\*='),

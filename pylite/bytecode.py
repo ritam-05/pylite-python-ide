@@ -9,15 +9,16 @@ class Op(Enum):
     ADD           = auto()
     SUB           = auto()
     MUL           = auto()
-    DIV           = auto() # ADDED
-    FLOORDIV      = auto() # ADDED
-    MOD           = auto() # ADDED
-    POW           = auto() # ADDED
+    DIV           = auto()
+    FLOORDIV      = auto()
+    MOD           = auto()
+    POW           = auto()
     CMP_EQ        = auto()
     CMP_NEQ       = auto()
     CMP_LT        = auto()
     CMP_GT        = auto()
     JUMP_IF_FALSE = auto()
+    JUMP_IF_TRUE  = auto()
     JUMP          = auto()
     MAKE_FUNCTION = auto()
     CALL_FUNCTION = auto()
@@ -31,8 +32,10 @@ class Op(Enum):
     MAKE_CLASS    = auto()
     IMPORT_NAME   = auto()
     IMPORT_FROM   = auto()
-    DUP_TOP       = auto() # ADDED for Augmented Assignment
-    DUP_TWO       = auto() # ADDED for Augmented Assignment
+    DUP_TOP       = auto()
+    DUP_TWO       = auto()
+    POP_TOP       = auto()
+    UNARY_NOT     = auto()
 
 @dataclass
 class Instruction:

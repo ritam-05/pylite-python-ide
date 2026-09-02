@@ -119,8 +119,15 @@ class VM:
                 
             elif instr.opcode == Op.JUMP_IF_FALSE:
                 if not self.stack.pop(): frame.ip = instr.arg
+            elif instr.opcode == Op.JUMP_IF_TRUE: # ADDED
+                if self.stack.pop(): frame.ip = instr.arg
             elif instr.opcode == Op.JUMP:
                 frame.ip = instr.arg
+                
+            elif instr.opcode == Op.POP_TOP: # ADDED
+                self.stack.pop()
+            elif instr.opcode == Op.UNARY_NOT: # ADDED
+                self.stack.append(not self.stack.pop())
                 
             # --- STRUCTURES AND OOP ---
             elif instr.opcode == Op.MAKE_FUNCTION:

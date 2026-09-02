@@ -21,8 +21,7 @@ class Parser:
         statements = []
         while self.current_token().type != TokenType.EOF:
             if self.current_token().type == TokenType.NEWLINE:
-                self.eat(TokenType.NEWLINE)
-                continue
+                self.eat(TokenType.NEWLINE); continue
             statements.append(self.statement())
         return statements
 
@@ -88,11 +87,12 @@ class Parser:
 
         if self.current_token().type == TokenType.RETURN:
             self.eat(TokenType.RETURN)
-            return Return(value=self.comparison())
+            return Return(value=self.expression())
 
+        # MODIFIED: Robust handling of if, elif, and else chaining
         if self.current_token().type == TokenType.IF:
             self.eat(TokenType.IF)
-            condition = self.comparison()
+            condition = self.expression()
             self.eat(TokenType.COLON)
             
             while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
@@ -105,12 +105,34 @@ class Parser:
                 body.append(self.statement())
                 
             if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
-            
-            # SAFEGUARD: Consume any trailing newlines/blank lines before checking for else
-            while self.current_token().type == TokenType.NEWLINE:
-                self.eat(TokenType.NEWLINE)
+            while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
                 
             orelse = []
+            current_orelse_list = orelse
+            
+            # ELIF Chaining
+            while self.current_token().type == TokenType.ELIF:
+                self.eat(TokenType.ELIF)
+                elif_cond = self.expression()
+                self.eat(TokenType.COLON)
+                
+                while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+                self.eat(TokenType.INDENT)
+                
+                elif_body = []
+                while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
+                    if self.current_token().type == TokenType.NEWLINE:
+                        self.eat(TokenType.NEWLINE); continue
+                    elif_body.append(self.statement())
+                    
+                if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
+                while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+                
+                new_if = If(condition=elif_cond, body=elif_body, orelse=[])
+                current_orelse_list.append(new_if)
+                current_orelse_list = new_if.orelse
+
+            # Final ELSE
             if self.current_token().type == TokenType.ELSE:
                 self.eat(TokenType.ELSE)
                 self.eat(TokenType.COLON)
@@ -121,7 +143,7 @@ class Parser:
                 while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
                     if self.current_token().type == TokenType.NEWLINE:
                         self.eat(TokenType.NEWLINE); continue
-                    orelse.append(self.statement())
+                    current_orelse_list.append(self.statement())
                     
                 if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
                 
@@ -129,7 +151,7 @@ class Parser:
 
         if self.current_token().type == TokenType.WHILE:
             self.eat(TokenType.WHILE)
-            condition = self.comparison()
+            condition = self.expression()
             self.eat(TokenType.COLON)
             while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
             self.eat(TokenType.INDENT)
@@ -141,7 +163,7 @@ class Parser:
             if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
             return While(condition=condition, body=body)
 
-        expr = self.comparison()
+        expr = self.expression()
         
         assign_tokens = (TokenType.ASSIGN, TokenType.PLUS_ASSIGN, TokenType.MINUS_ASSIGN,
                          TokenType.STAR_ASSIGN, TokenType.SLASH_ASSIGN, TokenType.DOUBLE_SLASH_ASSIGN,
@@ -150,13 +172,41 @@ class Parser:
         if self.current_token().type in assign_tokens:
             op_token = self.current_token()
             self.eat(op_token.type)
-            value = self.comparison()
-            if op_token.type == TokenType.ASSIGN:
-                return Assign(target=expr, value=value)
-            else:
-                return AugAssign(target=expr, op=op_token.value, value=value)
+            value = self.expression()
+            if op_token.type == TokenType.ASSIGN: return Assign(target=expr, value=value)
+            else: return AugAssign(target=expr, op=op_token.value, value=value)
             
         return expr
+
+    # ADDED: Master Expression Entry Point
+    def expression(self) -> ASTNode:
+        return self.logic_or()
+
+    # ADDED: Logical OR precedence
+    def logic_or(self) -> ASTNode:
+        node = self.logic_and()
+        while self.current_token().type == TokenType.OR:
+            op = self.current_token().value
+            self.eat(TokenType.OR)
+            node = LogicalOp(left=node, op=op, right=self.logic_and())
+        return node
+
+    # ADDED: Logical AND precedence
+    def logic_and(self) -> ASTNode:
+        node = self.logic_not()
+        while self.current_token().type == TokenType.AND:
+            op = self.current_token().value
+            self.eat(TokenType.AND)
+            node = LogicalOp(left=node, op=op, right=self.logic_not())
+        return node
+
+    # ADDED: Logical NOT precedence
+    def logic_not(self) -> ASTNode:
+        if self.current_token().type == TokenType.NOT:
+            op = self.current_token().value
+            self.eat(TokenType.NOT)
+            return UnaryOp(op=op, operand=self.logic_not())
+        return self.comparison()
 
     def comparison(self) -> ASTNode:
         node = self.expr()
@@ -194,7 +244,9 @@ class Parser:
         token = self.current_token()
         if token.type == TokenType.NUMBER:
             self.eat(TokenType.NUMBER)
-            node = Number(value=int(token.value))
+            # MODIFIED: Float casting
+            val = float(token.value) if '.' in token.value else int(token.value)
+            node = Number(value=val)
         elif token.type == TokenType.STRING:
             self.eat(TokenType.STRING)
             node = String(value=token.value[1:-1])
@@ -209,30 +261,30 @@ class Parser:
             node = Name(value=token.value)
         elif token.type == TokenType.LPAREN:
             self.eat(TokenType.LPAREN)
-            node = self.comparison()
+            node = self.expression()
             self.eat(TokenType.RPAREN)
         elif token.type == TokenType.LBRACKET:
             self.eat(TokenType.LBRACKET)
             elements = []
             if self.current_token().type != TokenType.RBRACKET:
-                elements.append(self.comparison())
+                elements.append(self.expression())
                 while self.current_token().type == TokenType.COMMA:
                     self.eat(TokenType.COMMA)
-                    elements.append(self.comparison())
+                    elements.append(self.expression())
             self.eat(TokenType.RBRACKET)
             node = ListLiteral(elements=elements)
         elif token.type == TokenType.LBRACE:
             self.eat(TokenType.LBRACE)
             keys = []; values = []
             if self.current_token().type != TokenType.RBRACE:
-                keys.append(self.comparison())
+                keys.append(self.expression())
                 self.eat(TokenType.COLON)
-                values.append(self.comparison())
+                values.append(self.expression())
                 while self.current_token().type == TokenType.COMMA:
                     self.eat(TokenType.COMMA)
-                    keys.append(self.comparison())
+                    keys.append(self.expression())
                     self.eat(TokenType.COLON)
-                    values.append(self.comparison())
+                    values.append(self.expression())
             self.eat(TokenType.RBRACE)
             node = DictLiteral(keys=keys, values=values)
         else:
@@ -243,16 +295,16 @@ class Parser:
                 self.eat(TokenType.LPAREN)
                 args = []
                 if self.current_token().type != TokenType.RPAREN:
-                    args.append(self.comparison())
+                    args.append(self.expression())
                     while self.current_token().type == TokenType.COMMA:
                         self.eat(TokenType.COMMA)
-                        args.append(self.comparison())
+                        args.append(self.expression())
                 self.eat(TokenType.RPAREN)
                 node = Call(func=node, args=args)
                 
             elif self.current_token().type == TokenType.LBRACKET:
                 self.eat(TokenType.LBRACKET)
-                index = self.comparison()
+                index = self.expression()
                 self.eat(TokenType.RBRACKET)
                 node = Subscript(obj=node, index=index)
                 

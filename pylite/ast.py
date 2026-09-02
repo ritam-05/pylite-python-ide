@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Union
 
 class ASTNode: pass
 
 @dataclass
-class Number(ASTNode): value: int
+class Number(ASTNode): value: Union[int, float]
 @dataclass
 class Boolean(ASTNode): value: bool
 @dataclass
@@ -13,17 +13,21 @@ class String(ASTNode): value: str
 class Name(ASTNode): value: str
 @dataclass
 class BinOp(ASTNode): left: ASTNode; op: str; right: ASTNode
+
+# ADDED FOR PHASE 10-12
+@dataclass
+class LogicalOp(ASTNode): left: ASTNode; op: str; right: ASTNode
+@dataclass
+class UnaryOp(ASTNode): op: str; operand: ASTNode
+
 @dataclass
 class Assign(ASTNode): target: ASTNode; value: ASTNode
 @dataclass
 class AugAssign(ASTNode): target: ASTNode; op: str; value: ASTNode
 @dataclass
 class Call(ASTNode): func: ASTNode; args: List[ASTNode]
-
-# MODIFIED: If node now accepts the alternative branch
 @dataclass
 class If(ASTNode): condition: ASTNode; body: List[ASTNode]; orelse: List[ASTNode] = None
-
 @dataclass
 class While(ASTNode): condition: ASTNode; body: List[ASTNode]
 @dataclass

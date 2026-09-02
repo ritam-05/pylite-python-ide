@@ -18,14 +18,26 @@ class Compiler:
         self.emit(Op.RETURN_VALUE)
         return PyLiteFunction("<main>", [], self.instructions)
 
+    def _emit_binop(self, op: str):
+        if op == '+': self.emit(Op.ADD)
+        elif op == '-': self.emit(Op.SUB)
+        elif op == '*': self.emit(Op.MUL)
+        elif op == '/': self.emit(Op.DIV)
+        elif op == '//': self.emit(Op.FLOORDIV)
+        elif op == '%': self.emit(Op.MOD)
+        elif op == '**': self.emit(Op.POW)
+        else: raise NotImplementedError(f"Unknown binop {op}")
+
     def visit(self, node: ASTNode):
         if isinstance(node, Number): self.emit(Op.LOAD_CONST, node.value)
         elif isinstance(node, Boolean): self.emit(Op.LOAD_CONST, node.value)
         elif isinstance(node, String): self.emit(Op.LOAD_CONST, node.value)
         elif isinstance(node, Name): self.emit(Op.LOAD_NAME, node.value)
         elif isinstance(node, BinOp): self.visit_BinOp(node)
+        elif isinstance(node, LogicalOp): self.visit_LogicalOp(node)
+        elif isinstance(node, UnaryOp): self.visit_UnaryOp(node)
         elif isinstance(node, Assign): self.visit_Assign(node)
-        elif isinstance(node, AugAssign): self.visit_AugAssign(node) # ADDED
+        elif isinstance(node, AugAssign): self.visit_AugAssign(node) 
         elif isinstance(node, If): self.visit_If(node)
         elif isinstance(node, While): self.visit_While(node)
         elif isinstance(node, FunctionDef): self.visit_FunctionDef(node)
@@ -38,22 +50,29 @@ class Compiler:
         elif isinstance(node, Attribute): self.visit_Attribute(node)
         elif isinstance(node, Import): self.visit_Import(node)
         elif isinstance(node, ImportFrom): self.visit_ImportFrom(node)
-        else:
-            raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
+        else: raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
 
-    # ADDED: Unified binary operation emitter
-    def _emit_binop(self, op: str):
-        if op == '+': self.emit(Op.ADD)
-        elif op == '-': self.emit(Op.SUB)
-        elif op == '*': self.emit(Op.MUL)
-        elif op == '/': self.emit(Op.DIV)
-        elif op == '//': self.emit(Op.FLOORDIV)
-        elif op == '%': self.emit(Op.MOD)
-        elif op == '**': self.emit(Op.POW)
-        else: raise NotImplementedError(f"Unknown binop {op}")
+    def visit_LogicalOp(self, node: LogicalOp):
+        self.visit(node.left)
+        self.emit(Op.DUP_TOP)
+        
+        if node.op == 'and':
+            jump_idx = self.emit(Op.JUMP_IF_FALSE)
+        else:
+            jump_idx = self.emit(Op.JUMP_IF_TRUE)
+            
+        self.emit(Op.POP_TOP)
+        self.visit(node.right)
+        self.instructions[jump_idx].arg = len(self.instructions)
+
+    def visit_UnaryOp(self, node: UnaryOp):
+        self.visit(node.operand)
+        if node.op == 'not':
+            self.emit(Op.UNARY_NOT)
 
     def visit_BinOp(self, node: BinOp):
-        self.visit(node.left); self.visit(node.right)
+        self.visit(node.left)
+        self.visit(node.right)
         if node.op in ('+', '-', '*', '/', '//', '%', '**'):
             self._emit_binop(node.op)
         elif node.op == '==': self.emit(Op.CMP_EQ)
@@ -73,65 +92,57 @@ class Compiler:
             self.visit(node.target.obj)
             self.emit(Op.STORE_ATTR, node.target.attr)
 
-    # ADDED: Safely evaluate a target once using DUP instructions
     def visit_AugAssign(self, node: AugAssign):
-        base_op = node.op[:-1] # Extracts '+' from '+='
-        
+        base_op = node.op[:-1]
         if isinstance(node.target, Name):
             self.emit(Op.LOAD_NAME, node.target.value)
             self.visit(node.value)
             self._emit_binop(base_op)
             self.emit(Op.STORE_NAME, node.target.value)
-            
         elif isinstance(node.target, Subscript):
             self.visit(node.target.obj)
             self.visit(node.target.index)
-            self.emit(Op.DUP_TWO)       # [obj, idx] -> [obj, idx, obj, idx]
-            self.emit(Op.LOAD_INDEX)    # [obj, idx, obj[idx]]
-            self.visit(node.value)      # [obj, idx, obj[idx], val]
-            self._emit_binop(base_op)   # [obj, idx, result]
-            self.emit(Op.STORE_INDEX)   # Stores result to obj[idx]
-            
+            self.emit(Op.DUP_TWO)
+            self.emit(Op.LOAD_INDEX)
+            self.visit(node.value)
+            self._emit_binop(base_op)
+            self.emit(Op.STORE_INDEX)
         elif isinstance(node.target, Attribute):
             self.visit(node.target.obj)
-            self.emit(Op.DUP_TOP)       # [obj] -> [obj, obj]
-            self.emit(Op.LOAD_ATTR, node.target.attr) # [obj, obj.attr]
-            self.visit(node.value)      # [obj, obj.attr, val]
-            self._emit_binop(base_op)   # [obj, result]
-            self.emit(Op.STORE_ATTR, node.target.attr) # Stores result to obj.attr
-        else:
-            raise SyntaxError("Invalid target for augmented assignment")
+            self.emit(Op.DUP_TOP)
+            self.emit(Op.LOAD_ATTR, node.target.attr)
+            self.visit(node.value)
+            self._emit_binop(base_op)
+            self.emit(Op.STORE_ATTR, node.target.attr)
 
     def visit_If(self, node: If):
         self.visit(node.condition)
         jump_if_false_idx = self.emit(Op.JUMP_IF_FALSE)
-        
-        for stmt in node.body: self.visit(stmt)
-        
-        # MODIFIED: Handle the alternative branch jump patching
+        for stmt in node.body:
+            self.visit(stmt)
+            
         if node.orelse:
             jump_end_idx = self.emit(Op.JUMP)
-            # Patch the first jump to land at the start of the else block
             self.instructions[jump_if_false_idx].arg = len(self.instructions)
-            
-            for stmt in node.orelse: self.visit(stmt)
-            # Patch the second jump to land at the end of the else block
+            for stmt in node.orelse:
+                self.visit(stmt)
             self.instructions[jump_end_idx].arg = len(self.instructions)
         else:
-            # If no else, jump past the if body
             self.instructions[jump_if_false_idx].arg = len(self.instructions)
 
     def visit_While(self, node: While):
         start_idx = len(self.instructions)
         self.visit(node.condition)
         jump_idx = self.emit(Op.JUMP_IF_FALSE)
-        for stmt in node.body: self.visit(stmt)
+        for stmt in node.body:
+            self.visit(stmt)
         self.emit(Op.JUMP, start_idx)
         self.instructions[jump_idx].arg = len(self.instructions)
 
     def visit_FunctionDef(self, node: FunctionDef):
         func_comp = Compiler()
-        for stmt in node.body: func_comp.visit(stmt)
+        for stmt in node.body:
+            func_comp.visit(stmt)
         if not func_comp.instructions or func_comp.instructions[-1].opcode != Op.RETURN_VALUE:
             func_comp.emit(Op.LOAD_CONST, None)
             func_comp.emit(Op.RETURN_VALUE)
@@ -145,11 +156,13 @@ class Compiler:
 
     def visit_Call(self, node: Call):
         self.visit(node.func)
-        for arg in node.args: self.visit(arg)
+        for arg in node.args:
+            self.visit(arg)
         self.emit(Op.CALL_FUNCTION, len(node.args))
 
     def visit_ListLiteral(self, node: ListLiteral):
-        for el in node.elements: self.visit(el)
+        for el in node.elements:
+            self.visit(el)
         self.emit(Op.BUILD_LIST, len(node.elements))
 
     def visit_DictLiteral(self, node: DictLiteral):
@@ -168,7 +181,8 @@ class Compiler:
         for stmt in node.body:
             if isinstance(stmt, FunctionDef):
                 fc = Compiler()
-                for s in stmt.body: fc.visit(s)
+                for s in stmt.body:
+                    fc.visit(s)
                 if not fc.instructions or fc.instructions[-1].opcode != Op.RETURN_VALUE:
                     fc.emit(Op.LOAD_CONST, None)
                     fc.emit(Op.RETURN_VALUE)
