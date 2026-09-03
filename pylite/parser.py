@@ -30,6 +30,26 @@ class Parser:
             self.eat(TokenType.CLASS)
             name = self.current_token().value
             self.eat(TokenType.IDENTIFIER)
+
+            base = None
+            if self.current_token().type == TokenType.LPAREN:
+                self.eat(TokenType.LPAREN)
+                base = self.current_token().value
+                self.eat(TokenType.IDENTIFIER)
+                self.eat(TokenType.RPAREN)
+                
+            self.eat(TokenType.COLON)
+            while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+            self.eat(TokenType.INDENT)
+            body = []
+            while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
+                if self.current_token().type == TokenType.NEWLINE:
+                    self.eat(TokenType.NEWLINE); continue
+                body.append(self.statement())
+            if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
+            return ClassDef(name=name, body=body, base=base)          # Parse the base class (if any)
+
+
             self.eat(TokenType.COLON)
             while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
             self.eat(TokenType.INDENT)
@@ -40,7 +60,6 @@ class Parser:
                 body.append(self.statement())
             if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
             return ClassDef(name=name, body=body)
-
         if self.current_token().type == TokenType.IMPORT:
             self.eat(TokenType.IMPORT)
             module = self.current_token().value
@@ -321,6 +340,11 @@ class Parser:
         elif token.type == TokenType.FALSE:
             self.eat(TokenType.FALSE)
             node = Boolean(value=False)
+        elif token.type == TokenType.SUPER:
+            self.eat(TokenType.SUPER)
+            self.eat(TokenType.LPAREN)
+            self.eat(TokenType.RPAREN)
+            node = Super()
         elif token.type == TokenType.IDENTIFIER:
             self.eat(TokenType.IDENTIFIER)
             node = Name(value=token.value)

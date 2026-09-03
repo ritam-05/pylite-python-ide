@@ -18,15 +18,16 @@ class TokenType(Enum):
     DEF        = auto()
     RETURN     = auto()
     CLASS      = auto()
+    SUPER      = auto()
     IMPORT     = auto()
     FROM       = auto()
     AND        = auto()
     OR         = auto()
     NOT        = auto()
-    TRY        = auto() # ADDED
-    EXCEPT     = auto() # ADDED
-    RAISE      = auto() # ADDED
-    AS         = auto() # ADDED
+    TRY        = auto()
+    EXCEPT     = auto()
+    RAISE      = auto()
+    AS         = auto()
     ASSIGN     = auto()
     PLUS_ASSIGN = auto()
     MINUS_ASSIGN = auto()
@@ -80,15 +81,16 @@ class Lexer:
         'def': TokenType.DEF,
         'return': TokenType.RETURN,
         'class': TokenType.CLASS,
+        'super': TokenType.SUPER,
         'import': TokenType.IMPORT,
         'from': TokenType.FROM,
         'and': TokenType.AND,
         'or': TokenType.OR,
         'not': TokenType.NOT,
-        'try': TokenType.TRY,       # ADDED
-        'except': TokenType.EXCEPT, # ADDED
-        'raise': TokenType.RAISE,   # ADDED
-        'as': TokenType.AS          # ADDED
+        'try': TokenType.TRY,
+        'except': TokenType.EXCEPT,
+        'raise': TokenType.RAISE,
+        'as': TokenType.AS
     }
 
     RULES = [
@@ -148,8 +150,16 @@ class Lexer:
                 continue
             elif kind == 'MISMATCH':
                 raise SyntaxError(f"Unexpected character '{value}' at line {line}")
-            
             elif kind == 'NEWLINE':
+                # MODIFIED: Lookahead to see if the next line is completely blank or a comment
+                next_char = self.source_code[match.end():match.end()+1]
+                if next_char in ('\r', '\n', '#') or next_char == '':
+                    # It's a blank line, so just advance the line counter and ignore its indentation
+                    line += 1
+                    # Update line_start to account for the newline character(s) we just skipped
+                    line_start = match.end() - len(value.replace('\r', '').replace('\n', ''))
+                    continue
+
                 spaces = value.replace('\r', '').replace('\n', '')
                 indent_level = len(spaces)
 

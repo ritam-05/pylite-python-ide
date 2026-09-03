@@ -41,12 +41,11 @@ class Op(Enum):
     GET_ITER      = auto()
     FOR_ITER      = auto()
     BUILD_SLICE   = auto()
-    
-    # ADDED FOR EXCEPTIONS
     SETUP_CATCH   = auto()
     POP_CATCH     = auto()
     RAISE_EXC     = auto()
     CHECK_EXC_MATCH = auto()
+    LOAD_SUPER    = auto() # ADDED
 
 @dataclass
 class Instruction:

@@ -13,15 +13,12 @@ class String(ASTNode): value: str
 class Name(ASTNode): value: str
 @dataclass
 class BinOp(ASTNode): left: ASTNode; op: str; right: ASTNode
-
 @dataclass
 class LogicalOp(ASTNode): left: ASTNode; op: str; right: ASTNode
 @dataclass
 class UnaryOp(ASTNode): op: str; operand: ASTNode
-
 @dataclass
 class Expr(ASTNode): value: ASTNode 
-
 @dataclass
 class Assign(ASTNode): target: ASTNode; value: ASTNode
 @dataclass
@@ -46,16 +43,19 @@ class Subscript(ASTNode): obj: ASTNode; index: ASTNode
 class Slice(ASTNode): lower: ASTNode; upper: ASTNode; step: ASTNode 
 @dataclass
 class DictLiteral(ASTNode): keys: List[ASTNode]; values: List[ASTNode]
+
 @dataclass
-class ClassDef(ASTNode): name: str; body: List[ASTNode]
+class ClassDef(ASTNode): name: str; body: List[ASTNode]; base: str = None # MODIFIED
+
+@dataclass
+class Super(ASTNode): pass # ADDED
+
 @dataclass
 class Attribute(ASTNode): obj: ASTNode; attr: str
 @dataclass
 class Import(ASTNode): module: str
 @dataclass
 class ImportFrom(ASTNode): module: str; names: List[str]
-
-# ADDED FOR EXCEPTIONS
 @dataclass
 class ExceptHandler(ASTNode): type: ASTNode; name: str; body: List[ASTNode]
 @dataclass

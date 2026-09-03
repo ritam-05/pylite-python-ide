@@ -42,8 +42,8 @@ class Compiler:
         elif isinstance(node, If): self.visit_If(node)
         elif isinstance(node, While): self.visit_While(node)
         elif isinstance(node, For): self.visit_For(node)
-        elif isinstance(node, Try): self.visit_Try(node)       # ADDED
-        elif isinstance(node, Raise): self.visit_Raise(node)   # ADDED
+        elif isinstance(node, Try): self.visit_Try(node)
+        elif isinstance(node, Raise): self.visit_Raise(node)
         elif isinstance(node, FunctionDef): self.visit_FunctionDef(node)
         elif isinstance(node, Call): self.visit_Call(node)
         elif isinstance(node, Return): self.visit_Return(node)
@@ -52,12 +52,12 @@ class Compiler:
         elif isinstance(node, Subscript): self.visit_Subscript(node)
         elif isinstance(node, Slice): self.visit_Slice(node)
         elif isinstance(node, ClassDef): self.visit_ClassDef(node)
+        elif isinstance(node, Super): self.visit_Super(node)
         elif isinstance(node, Attribute): self.visit_Attribute(node)
         elif isinstance(node, Import): self.visit_Import(node)
         elif isinstance(node, ImportFrom): self.visit_ImportFrom(node)
         else: raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
 
-    # ADDED: Exception compilation
     def visit_Raise(self, node: Raise):
         self.visit(node.exc)
         self.emit(Op.RAISE_EXC)
@@ -260,7 +260,13 @@ class Compiler:
         
         self.emit(Op.BUILD_SLICE)
 
+    def visit_Super(self, node: Super):
+        self.emit(Op.LOAD_SUPER)
+
     def visit_ClassDef(self, node: ClassDef):
+        if node.base:
+            self.emit(Op.LOAD_NAME, node.base)
+            
         methods = {}
         for stmt in node.body:
             if isinstance(stmt, FunctionDef):
@@ -271,7 +277,8 @@ class Compiler:
                     fc.emit(Op.LOAD_CONST, None)
                     fc.emit(Op.RETURN_VALUE)
                 methods[stmt.name] = PyLiteFunction(stmt.name, stmt.params, fc.instructions)
-        self.emit(Op.MAKE_CLASS, (node.name, methods))
+                
+        self.emit(Op.MAKE_CLASS, (node.name, methods, bool(node.base)))
         self.emit(Op.STORE_NAME, node.name)
 
     def visit_Attribute(self, node: Attribute):
