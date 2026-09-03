@@ -1,6 +1,10 @@
 import importlib
 import sys
 import os
+import math
+import collections
+import heapq
+import bisect
 from typing import Any, List, Dict
 from pylite.bytecode import Op, PyLiteFunction
 
@@ -129,23 +133,30 @@ class BoundMethod:
 
 
 class VM:
-    def __init__(self, stdout_write=None):
+    # MODIFIED: Accepts input_cb
+    def __init__(self, stdout_write=None, input_cb=None):
         self.stack: List[Any] = []
         self.should_stop = False
         self.stdout_write = stdout_write or (lambda text: print(text, end=""))
+        self.input_cb = input_cb or input
 
         def pylite_print(*args, sep=" ", end="\n"):
             text = sep.join(str(a) for a in args) + end
             self.stdout_write(text)
 
+        # MODIFIED: Added math, input, and CP collections
         self.globals: Dict[str, Any] = {
             "print": pylite_print,
+            "input": self.input_cb,
             "len": len, "set": set, "list": list, "tuple": tuple, "dict": dict,
             "int": int, "float": float, "str": str, "bool": bool,
             "range": range, "enumerate": enumerate, "zip": zip,
             "map": map, "filter": filter, "reversed": reversed, "sorted": sorted,
             "min": min, "max": max, "sum": sum, "abs": abs, "round": round,
             "any": any, "all": all, "chr": chr, "ord": ord,
+            "bin": bin, "hex": hex, "oct": oct,
+            "math": math, "heapq": heapq, "bisect": bisect, "collections": collections,
+            "deque": collections.deque, "Counter": collections.Counter, "defaultdict": collections.defaultdict,
             "Exception": Exception, "ValueError": ValueError, "TypeError": TypeError,
             "IndexError": IndexError, "KeyError": KeyError, "ZeroDivisionError": ZeroDivisionError
         }
@@ -157,7 +168,6 @@ class VM:
         env = Environment(parent=closure.env, initial=dict(zip(closure.func.params, [obj, *args])))
         return self._execute_loop([CallFrame(closure.func, env)])
 
-    # Helper maps both pos_args and kwargs properly to PyLite params
     def _bind_args(self, params, pos_args, kwargs):
         env_vars = {}
         p_idx = 0
@@ -373,7 +383,6 @@ class VM:
                     for name in names:
                         self.stack.append(getattr(mod, name))
 
-                # MODIFIED: Unified Calling & Kwargs Extraction
                 elif instr.opcode in (Op.CALL_FUNCTION, Op.CALL_FUNCTION_KW):
                     is_kw = (instr.opcode == Op.CALL_FUNCTION_KW)
                     arg_count = instr.arg
@@ -390,7 +399,6 @@ class VM:
                     is_pylite_callable = isinstance(func, (PyLiteClass, BoundMethod, PyLiteClosure))
                     
                     if not is_pylite_callable and callable(func):
-                        # Pure Native Python Callable
                         self.stack.append(func(*pos_args, **kwargs))
                     elif is_pylite_callable:
                         if isinstance(func, PyLiteClass):

@@ -19,7 +19,7 @@ def run_file(filepath):
         compiler = Compiler()
         main_func = compiler.compile(ast)
         
-        vm = VM()
+        vm = VM() # Automatically defaults to sys.stdin input()
         vm.run(main_func)
         
     except Exception as e:
