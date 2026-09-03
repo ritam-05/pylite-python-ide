@@ -17,12 +17,14 @@ class Op(Enum):
     CMP_NEQ       = auto()
     CMP_LT        = auto()
     CMP_GT        = auto()
+    CMP_IS        = auto() # ADDED
+    CMP_IS_NOT    = auto() # ADDED
     JUMP_IF_FALSE = auto()
     JUMP_IF_TRUE  = auto()
     JUMP          = auto()
     MAKE_FUNCTION = auto()
     CALL_FUNCTION = auto()
-    CALL_FUNCTION_KW = auto() # ADDED
+    CALL_FUNCTION_KW = auto()
     RETURN_VALUE  = auto()
     BUILD_LIST    = auto()
     BUILD_TUPLE   = auto()

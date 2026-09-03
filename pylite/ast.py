@@ -10,6 +10,8 @@ class Boolean(ASTNode): value: bool
 @dataclass
 class String(ASTNode): value: str
 @dataclass
+class NoneVal(ASTNode): pass # ADDED
+@dataclass
 class Name(ASTNode): value: str
 @dataclass
 class BinOp(ASTNode): left: ASTNode; op: str; right: ASTNode
@@ -23,11 +25,8 @@ class Expr(ASTNode): value: ASTNode
 class Assign(ASTNode): target: ASTNode; value: ASTNode
 @dataclass
 class AugAssign(ASTNode): target: ASTNode; op: str; value: ASTNode
-
-# MODIFIED: Added kwargs support
 @dataclass
 class Call(ASTNode): func: ASTNode; args: List[ASTNode]; kwargs: dict = None
-
 @dataclass
 class If(ASTNode): condition: ASTNode; body: List[ASTNode]; orelse: List[ASTNode] = None
 @dataclass

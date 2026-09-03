@@ -9,11 +9,13 @@ class TokenType(Enum):
     STRING     = auto()
     TRUE       = auto()
     FALSE      = auto()
+    NONE       = auto() # ADDED
     IF         = auto()
     ELIF       = auto()
     ELSE       = auto()
     FOR        = auto()
     IN         = auto()
+    IS         = auto() # ADDED
     WHILE      = auto()
     DEF        = auto()
     RETURN     = auto()
@@ -21,7 +23,7 @@ class TokenType(Enum):
     SUPER      = auto()
     GLOBAL     = auto()
     NONLOCAL   = auto()
-    LAMBDA     = auto() # ADDED
+    LAMBDA     = auto()
     IMPORT     = auto()
     FROM       = auto()
     AND        = auto()
@@ -75,11 +77,13 @@ class Lexer:
     KEYWORDS = {
         'True': TokenType.TRUE,
         'False': TokenType.FALSE,
+        'None': TokenType.NONE, # ADDED
         'if': TokenType.IF,
         'elif': TokenType.ELIF,
         'else': TokenType.ELSE,
         'for': TokenType.FOR,
         'in': TokenType.IN,
+        'is': TokenType.IS, # ADDED
         'while': TokenType.WHILE,
         'def': TokenType.DEF,
         'return': TokenType.RETURN,
@@ -87,7 +91,7 @@ class Lexer:
         'super': TokenType.SUPER,
         'global': TokenType.GLOBAL,
         'nonlocal': TokenType.NONLOCAL,
-        'lambda': TokenType.LAMBDA, # ADDED
+        'lambda': TokenType.LAMBDA,
         'import': TokenType.IMPORT,
         'from': TokenType.FROM,
         'and': TokenType.AND,

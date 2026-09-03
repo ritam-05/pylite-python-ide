@@ -8,6 +8,11 @@ import bisect
 from typing import Any, List, Dict
 from pylite.bytecode import Op, PyLiteFunction
 
+# Import compiler chain to support dynamic project-local modules
+from pylite.lexer import Lexer
+from pylite.parser import Parser
+from pylite.compiler import Compiler
+
 if os.getcwd() not in sys.path:
     sys.path.insert(0, os.getcwd())
 
@@ -131,9 +136,17 @@ class BoundMethod:
         env = Environment(parent=self.func.env, initial=env_vars)
         return self.vm._execute_loop([CallFrame(self.func.func, env)])
 
+# ADDED: Wrapper container for local .py files that gets pushed to the stack
+class PyLiteModule:
+    def __init__(self, name: str, env: Environment):
+        self.name = name
+        self.env = env
+    def __getattr__(self, name):
+        if name in self.env.vars: return self.env.vars[name]
+        raise AttributeError(f"module '{self.name}' has no attribute '{name}'")
+
 
 class VM:
-    # MODIFIED: Accepts input_cb
     def __init__(self, stdout_write=None, input_cb=None):
         self.stack: List[Any] = []
         self.should_stop = False
@@ -144,7 +157,6 @@ class VM:
             text = sep.join(str(a) for a in args) + end
             self.stdout_write(text)
 
-        # MODIFIED: Added math, input, and CP collections
         self.globals: Dict[str, Any] = {
             "print": pylite_print,
             "input": self.input_cb,
@@ -158,8 +170,19 @@ class VM:
             "math": math, "heapq": heapq, "bisect": bisect, "collections": collections,
             "deque": collections.deque, "Counter": collections.Counter, "defaultdict": collections.defaultdict,
             "Exception": Exception, "ValueError": ValueError, "TypeError": TypeError,
-            "IndexError": IndexError, "KeyError": KeyError, "ZeroDivisionError": ZeroDivisionError
+            "IndexError": IndexError, "KeyError": KeyError, "ZeroDivisionError": ZeroDivisionError,
+            "__modules__": {} # Cache for local imports
         }
+
+    # ADDED: Implements truthiness checks!
+    def _truthy(self, obj):
+        if isinstance(obj, PyLiteInstance):
+            res = self._call_magic(obj, "__bool__")
+            if res is not NotImplemented: return bool(res)
+            res = self._call_magic(obj, "__len__")
+            if res is not NotImplemented: return bool(res)
+            return True
+        return bool(obj)
 
     def _call_magic(self, obj, method_name, *args):
         if not isinstance(obj, PyLiteInstance): return NotImplemented
@@ -213,7 +236,6 @@ class VM:
                 elif instr.opcode == Op.STORE_GLOBAL: self.globals[instr.arg] = self.stack.pop()
                 elif instr.opcode == Op.STORE_NONLOCAL: frame.env.set_nonlocal(instr.arg, self.stack.pop())
                     
-                # --- ARITHMETIC ---
                 elif instr.opcode == Op.ADD:
                     b = self.stack.pop(); a = self.stack.pop()
                     res = self._call_magic(a, "__add__", b)
@@ -242,11 +264,12 @@ class VM:
                 elif instr.opcode == Op.DUP_TOP: self.stack.append(self.stack[-1])
                 elif instr.opcode == Op.DUP_TWO: self.stack.extend(self.stack[-2:])
                 elif instr.opcode == Op.POP_TOP: self.stack.pop()
-                elif instr.opcode == Op.UNARY_NOT: self.stack.append(not self.stack.pop())
+                
+                # MODIFIED: Unary not checks truthiness!
+                elif instr.opcode == Op.UNARY_NOT: self.stack.append(not self._truthy(self.stack.pop()))
                 elif instr.opcode == Op.UNARY_NEGATIVE: self.stack.append(-self.stack.pop())
                 elif instr.opcode == Op.UNARY_POSITIVE: self.stack.append(+self.stack.pop())
 
-                # --- COMPARISONS ---
                 elif instr.opcode == Op.CMP_EQ:
                     b = self.stack.pop(); a = self.stack.pop()
                     res = self._call_magic(a, "__eq__", b)
@@ -263,11 +286,20 @@ class VM:
                     b = self.stack.pop(); a = self.stack.pop()
                     res = self._call_magic(a, "__gt__", b)
                     self.stack.append(res if res is not NotImplemented else a > b)
+                
+                # ADDED: is and is not
+                elif instr.opcode == Op.CMP_IS:
+                    b = self.stack.pop(); a = self.stack.pop()
+                    self.stack.append(a is b)
+                elif instr.opcode == Op.CMP_IS_NOT:
+                    b = self.stack.pop(); a = self.stack.pop()
+                    self.stack.append(a is not b)
                     
+                # MODIFIED: Jumps check truthiness!
                 elif instr.opcode == Op.JUMP_IF_FALSE:
-                    if not self.stack.pop(): frame.ip = instr.arg
+                    if not self._truthy(self.stack.pop()): frame.ip = instr.arg
                 elif instr.opcode == Op.JUMP_IF_TRUE:
-                    if self.stack.pop(): frame.ip = instr.arg
+                    if self._truthy(self.stack.pop()): frame.ip = instr.arg
                 elif instr.opcode == Op.JUMP:
                     frame.ip = instr.arg
                     
@@ -293,7 +325,6 @@ class VM:
                     exc_type = self.stack.pop(); exc_inst = self.stack.pop()
                     self.stack.append(isinstance(exc_inst, exc_type))
 
-                # --- CLOSURES AND OOP ---
                 elif instr.opcode == Op.MAKE_FUNCTION:
                     self.stack.append(PyLiteClosure(instr.arg, frame.env, self))
                     
@@ -365,6 +396,8 @@ class VM:
                         method = obj.base_cls.get_method(instr.arg)
                         if method: self.stack.append(BoundMethod(obj.inst, method, self))
                         else: raise AttributeError(f"super object has no attribute '{instr.arg}'")
+                    elif isinstance(obj, PyLiteModule):
+                        self.stack.append(getattr(obj, instr.arg))
                     else:
                         self.stack.append(getattr(obj, instr.arg))
 
@@ -373,15 +406,46 @@ class VM:
                     if isinstance(obj, PyLiteInstance): obj.attrs[instr.arg] = val
                     else: setattr(obj, instr.arg, val)
 
+                # MODIFIED: PyLite Local Modules Loader
                 elif instr.opcode == Op.IMPORT_NAME:
-                    mod = importlib.import_module(instr.arg)
-                    self.stack.append(mod)
+                    mod_name = instr.arg
+                    mod_path = f"{mod_name}.py"
+                    if os.path.exists(mod_path):
+                        if mod_name in self.globals["__modules__"]:
+                            self.stack.append(self.globals["__modules__"][mod_name])
+                        else:
+                            with open(mod_path, 'r', encoding='utf-8') as f: code = f.read()
+                            mod_vm = VM(stdout_write=self.stdout_write, input_cb=self.input_cb)
+                            mod_env = Environment(parent=None, initial=mod_vm.globals)
+                            mod_func = Compiler().compile(Parser(Lexer(code).tokenize()).parse())
+                            mod_vm._execute_loop([CallFrame(mod_func, mod_env)])
+                            mod_obj = PyLiteModule(mod_name, mod_env)
+                            self.globals["__modules__"][mod_name] = mod_obj
+                            self.stack.append(mod_obj)
+                    else:
+                        self.stack.append(importlib.import_module(mod_name))
 
+                # MODIFIED: PyLite Local Modules Loader
                 elif instr.opcode == Op.IMPORT_FROM:
                     mod_name, names = instr.arg
-                    mod = importlib.import_module(mod_name)
-                    for name in names:
-                        self.stack.append(getattr(mod, name))
+                    mod_path = f"{mod_name}.py"
+                    if os.path.exists(mod_path):
+                        if mod_name in self.globals["__modules__"]:
+                            mod_obj = self.globals["__modules__"][mod_name]
+                        else:
+                            with open(mod_path, 'r', encoding='utf-8') as f: code = f.read()
+                            mod_vm = VM(stdout_write=self.stdout_write, input_cb=self.input_cb)
+                            mod_env = Environment(parent=None, initial=mod_vm.globals)
+                            mod_func = Compiler().compile(Parser(Lexer(code).tokenize()).parse())
+                            mod_vm._execute_loop([CallFrame(mod_func, mod_env)])
+                            mod_obj = PyLiteModule(mod_name, mod_env)
+                            self.globals["__modules__"][mod_name] = mod_obj
+                        for name in names:
+                            self.stack.append(getattr(mod_obj, name))
+                    else:
+                        mod = importlib.import_module(mod_name)
+                        for name in names:
+                            self.stack.append(getattr(mod, name))
 
                 elif instr.opcode in (Op.CALL_FUNCTION, Op.CALL_FUNCTION_KW):
                     is_kw = (instr.opcode == Op.CALL_FUNCTION_KW)

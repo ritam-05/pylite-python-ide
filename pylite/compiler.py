@@ -19,8 +19,7 @@ class Compiler:
 
     def compile(self, statements: List[ASTNode]) -> PyLiteFunction:
         self.instructions = []
-        for stmt in statements:
-            self.visit(stmt)
+        for stmt in statements: self.visit(stmt)
         self.emit(Op.LOAD_CONST, None)
         self.emit(Op.RETURN_VALUE)
         return PyLiteFunction("<main>", [], self.instructions)
@@ -39,6 +38,7 @@ class Compiler:
         if isinstance(node, Number): self.emit(Op.LOAD_CONST, node.value)
         elif isinstance(node, Boolean): self.emit(Op.LOAD_CONST, node.value)
         elif isinstance(node, String): self.emit(Op.LOAD_CONST, node.value)
+        elif isinstance(node, NoneVal): self.visit_NoneVal(node) # ADDED
         elif isinstance(node, Name): self.emit(Op.LOAD_NAME, node.value)
         elif isinstance(node, BinOp): self.visit_BinOp(node)
         elif isinstance(node, LogicalOp): self.visit_LogicalOp(node)
@@ -71,6 +71,9 @@ class Compiler:
         elif isinstance(node, ImportFrom): self.visit_ImportFrom(node)
         else: raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
 
+    def visit_NoneVal(self, node: NoneVal):
+        self.emit(Op.LOAD_CONST, None)
+
     def visit_Global(self, node: Global):
         self.global_vars.update(node.names)
         
@@ -78,45 +81,34 @@ class Compiler:
         self.nonlocal_vars.update(node.names)
 
     def visit_Raise(self, node: Raise):
-        self.visit(node.exc)
-        self.emit(Op.RAISE_EXC)
+        self.visit(node.exc); self.emit(Op.RAISE_EXC)
         
     def visit_Try(self, node: Try):
         catch_idx = self.emit(Op.SETUP_CATCH)
         for stmt in node.body: self.visit(stmt)
         self.emit(Op.POP_CATCH)
         jump_end_idx = self.emit(Op.JUMP)
-        
         self.instructions[catch_idx].arg = len(self.instructions)
         end_jumps = [jump_end_idx]
-        
         for handler in node.handlers:
             if handler.type is not None:
-                self.emit(Op.DUP_TOP)
-                self.visit(handler.type)
-                self.emit(Op.CHECK_EXC_MATCH)
+                self.emit(Op.DUP_TOP); self.visit(handler.type); self.emit(Op.CHECK_EXC_MATCH)
                 jump_next_idx = self.emit(Op.JUMP_IF_FALSE)
-                
                 if handler.name: self._emit_store(handler.name)
                 else: self.emit(Op.POP_TOP)
-                    
                 for stmt in handler.body: self.visit(stmt)
                 end_jumps.append(self.emit(Op.JUMP))
                 self.instructions[jump_next_idx].arg = len(self.instructions)
             else:
                 if handler.name: self._emit_store(handler.name)
                 else: self.emit(Op.POP_TOP)
-                    
                 for stmt in handler.body: self.visit(stmt)
                 end_jumps.append(self.emit(Op.JUMP))
-
         self.emit(Op.RAISE_EXC)
-        for idx in end_jumps:
-            self.instructions[idx].arg = len(self.instructions)
+        for idx in end_jumps: self.instructions[idx].arg = len(self.instructions)
 
     def visit_Expr(self, node: Expr):
-        self.visit(node.value)
-        self.emit(Op.POP_TOP)
+        self.visit(node.value); self.emit(Op.POP_TOP)
 
     def visit_LogicalOp(self, node: LogicalOp):
         self.visit(node.left)
@@ -141,11 +133,12 @@ class Compiler:
         elif node.op == '!=': self.emit(Op.CMP_NEQ)
         elif node.op == '<': self.emit(Op.CMP_LT)
         elif node.op == '>': self.emit(Op.CMP_GT)
+        elif node.op == 'is': self.emit(Op.CMP_IS)         # ADDED
+        elif node.op == 'is not': self.emit(Op.CMP_IS_NOT) # ADDED
 
     def visit_Assign(self, node: Assign):
         self.visit(node.value)
-        if isinstance(node.target, Name):
-            self._emit_store(node.target.value)
+        if isinstance(node.target, Name): self._emit_store(node.target.value)
         elif isinstance(node.target, Subscript):
             self.visit(node.target.obj); self.visit(node.target.index); self.emit(Op.STORE_INDEX)
         elif isinstance(node.target, Attribute):
@@ -161,10 +154,7 @@ class Compiler:
     def visit_AugAssign(self, node: AugAssign):
         base_op = node.op[:-1]
         if isinstance(node.target, Name):
-            self.emit(Op.LOAD_NAME, node.target.value)
-            self.visit(node.value)
-            self._emit_binop(base_op)
-            self._emit_store(node.target.value)
+            self.emit(Op.LOAD_NAME, node.target.value); self.visit(node.value); self._emit_binop(base_op); self._emit_store(node.target.value)
         elif isinstance(node.target, Subscript):
             self.visit(node.target.obj); self.visit(node.target.index); self.emit(Op.DUP_TWO); self.emit(Op.LOAD_INDEX); self.visit(node.value); self._emit_binop(base_op); self.emit(Op.STORE_INDEX)
         elif isinstance(node.target, Attribute):
@@ -190,22 +180,16 @@ class Compiler:
         self.instructions[jump_idx].arg = len(self.instructions)
 
     def visit_For(self, node: For):
-        self.visit(node.iter)
-        self.emit(Op.GET_ITER)
-        
+        self.visit(node.iter); self.emit(Op.GET_ITER)
         start_idx = len(self.instructions)
         jump_end_idx = self.emit(Op.FOR_ITER)
-        
-        if isinstance(node.target, Name):
-            self._emit_store(node.target.value)
+        if isinstance(node.target, Name): self._emit_store(node.target.value)
         elif isinstance(node.target, TupleLiteral):
             self.emit(Op.UNPACK_SEQUENCE, len(node.target.elements))
             for el in node.target.elements:
                 if isinstance(el, Name): self._emit_store(el.value)
                 else: raise SyntaxError("Only simple variables supported in tuple unpacking")
-        else:
-            raise SyntaxError("Unsupported for-loop target")
-            
+        else: raise SyntaxError("Unsupported for-loop target")
         for stmt in node.body: self.visit(stmt)
         self.emit(Op.JUMP, start_idx)
         self.instructions[jump_end_idx].arg = len(self.instructions)
@@ -219,8 +203,7 @@ class Compiler:
         
     def visit_ListComp(self, node: ListComp):
         self.emit(Op.BUILD_LIST, 0)
-        self.visit(node.iter)
-        self.emit(Op.GET_ITER)
+        self.visit(node.iter); self.emit(Op.GET_ITER)
         loop_start = len(self.instructions)
         jump_end = self.emit(Op.FOR_ITER)
         if isinstance(node.target, Name): self._emit_store(node.target.value)
@@ -230,8 +213,7 @@ class Compiler:
                 if isinstance(el, Name): self._emit_store(el.value)
                 else: raise SyntaxError("Unsupported tuple unpacking in list comp")
         for cond in node.ifs:
-            self.visit(cond)
-            self.emit(Op.JUMP_IF_FALSE, loop_start)
+            self.visit(cond); self.emit(Op.JUMP_IF_FALSE, loop_start)
         self.visit(node.elt)
         self.emit(Op.LIST_APPEND, 2)
         self.emit(Op.JUMP, loop_start)
@@ -239,8 +221,7 @@ class Compiler:
 
     def visit_DictComp(self, node: DictComp):
         self.emit(Op.BUILD_DICT, 0)
-        self.visit(node.iter)
-        self.emit(Op.GET_ITER)
+        self.visit(node.iter); self.emit(Op.GET_ITER)
         loop_start = len(self.instructions)
         jump_end = self.emit(Op.FOR_ITER)
         if isinstance(node.target, Name): self._emit_store(node.target.value)
@@ -250,10 +231,8 @@ class Compiler:
                 if isinstance(el, Name): self._emit_store(el.value)
                 else: raise SyntaxError("Unsupported tuple unpacking in dict comp")
         for cond in node.ifs:
-            self.visit(cond)
-            self.emit(Op.JUMP_IF_FALSE, loop_start)
-        self.visit(node.key)
-        self.visit(node.value)
+            self.visit(cond); self.emit(Op.JUMP_IF_FALSE, loop_start)
+        self.visit(node.key); self.visit(node.value)
         self.emit(Op.DICT_SETITEM, 2)
         self.emit(Op.JUMP, loop_start)
         self.instructions[jump_end].arg = len(self.instructions)
@@ -270,11 +249,9 @@ class Compiler:
     def visit_Return(self, node: Return):
         self.visit(node.value); self.emit(Op.RETURN_VALUE)
 
-    # MODIFIED: Kwargs emit
     def visit_Call(self, node: Call):
         self.visit(node.func)
         for arg in node.args: self.visit(arg)
-        
         if node.kwargs:
             for k in node.kwargs.values(): self.visit(k)
             self.emit(Op.LOAD_CONST, tuple(node.kwargs.keys()))
