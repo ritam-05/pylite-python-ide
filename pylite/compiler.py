@@ -221,25 +221,19 @@ class Compiler:
         self.emit(Op.BUILD_LIST, 0)
         self.visit(node.iter)
         self.emit(Op.GET_ITER)
-        
         loop_start = len(self.instructions)
         jump_end = self.emit(Op.FOR_ITER)
-        
-        if isinstance(node.target, Name):
-            self._emit_store(node.target.value)
+        if isinstance(node.target, Name): self._emit_store(node.target.value)
         elif isinstance(node.target, TupleLiteral):
             self.emit(Op.UNPACK_SEQUENCE, len(node.target.elements))
             for el in node.target.elements:
                 if isinstance(el, Name): self._emit_store(el.value)
                 else: raise SyntaxError("Unsupported tuple unpacking in list comp")
-                
         for cond in node.ifs:
             self.visit(cond)
             self.emit(Op.JUMP_IF_FALSE, loop_start)
-            
         self.visit(node.elt)
         self.emit(Op.LIST_APPEND, 2)
-        
         self.emit(Op.JUMP, loop_start)
         self.instructions[jump_end].arg = len(self.instructions)
 
@@ -247,26 +241,20 @@ class Compiler:
         self.emit(Op.BUILD_DICT, 0)
         self.visit(node.iter)
         self.emit(Op.GET_ITER)
-        
         loop_start = len(self.instructions)
         jump_end = self.emit(Op.FOR_ITER)
-        
-        if isinstance(node.target, Name):
-            self._emit_store(node.target.value)
+        if isinstance(node.target, Name): self._emit_store(node.target.value)
         elif isinstance(node.target, TupleLiteral):
             self.emit(Op.UNPACK_SEQUENCE, len(node.target.elements))
             for el in node.target.elements:
                 if isinstance(el, Name): self._emit_store(el.value)
                 else: raise SyntaxError("Unsupported tuple unpacking in dict comp")
-                
         for cond in node.ifs:
             self.visit(cond)
             self.emit(Op.JUMP_IF_FALSE, loop_start)
-            
         self.visit(node.key)
         self.visit(node.value)
         self.emit(Op.DICT_SETITEM, 2)
-        
         self.emit(Op.JUMP, loop_start)
         self.instructions[jump_end].arg = len(self.instructions)
 
@@ -282,10 +270,17 @@ class Compiler:
     def visit_Return(self, node: Return):
         self.visit(node.value); self.emit(Op.RETURN_VALUE)
 
+    # MODIFIED: Kwargs emit
     def visit_Call(self, node: Call):
         self.visit(node.func)
         for arg in node.args: self.visit(arg)
-        self.emit(Op.CALL_FUNCTION, len(node.args))
+        
+        if node.kwargs:
+            for k in node.kwargs.values(): self.visit(k)
+            self.emit(Op.LOAD_CONST, tuple(node.kwargs.keys()))
+            self.emit(Op.CALL_FUNCTION_KW, len(node.args) + len(node.kwargs))
+        else:
+            self.emit(Op.CALL_FUNCTION, len(node.args))
 
     def visit_ListLiteral(self, node: ListLiteral):
         for el in node.elements: self.visit(el)

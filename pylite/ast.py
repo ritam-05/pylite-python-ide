@@ -23,8 +23,11 @@ class Expr(ASTNode): value: ASTNode
 class Assign(ASTNode): target: ASTNode; value: ASTNode
 @dataclass
 class AugAssign(ASTNode): target: ASTNode; op: str; value: ASTNode
+
+# MODIFIED: Added kwargs support
 @dataclass
-class Call(ASTNode): func: ASTNode; args: List[ASTNode]
+class Call(ASTNode): func: ASTNode; args: List[ASTNode]; kwargs: dict = None
+
 @dataclass
 class If(ASTNode): condition: ASTNode; body: List[ASTNode]; orelse: List[ASTNode] = None
 @dataclass
@@ -38,7 +41,7 @@ class Return(ASTNode): value: ASTNode
 @dataclass
 class ListLiteral(ASTNode): elements: List[ASTNode]
 @dataclass
-class TupleLiteral(ASTNode): elements: List[ASTNode] # ADDED
+class TupleLiteral(ASTNode): elements: List[ASTNode]
 @dataclass
 class Subscript(ASTNode): obj: ASTNode; index: ASTNode
 @dataclass
@@ -65,13 +68,6 @@ class Raise(ASTNode): exc: ASTNode
 class Global(ASTNode): names: List[str]
 @dataclass
 class Nonlocal(ASTNode): names: List[str]
-# ... (At the bottom of ast.py, add these nodes) ...
-@dataclass
-class Global(ASTNode): names: List[str]
-@dataclass
-class Nonlocal(ASTNode): names: List[str]
-
-# ADDED FOR SUGAR
 @dataclass
 class Lambda(ASTNode): params: List[str]; body: ASTNode
 @dataclass

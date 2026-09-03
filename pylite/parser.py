@@ -11,6 +11,11 @@ class Parser:
         if self.pos < len(self.tokens): return self.tokens[self.pos]
         return self.tokens[-1]
 
+    # ADDED: Look ahead one token for kwarg detection
+    def peek(self) -> Token:
+        if self.pos + 1 < len(self.tokens): return self.tokens[self.pos + 1]
+        return self.tokens[-1]
+
     def eat(self, token_type: TokenType):
         if self.current_token().type == token_type:
             self.pos += 1
@@ -302,7 +307,6 @@ class Parser:
             
         return Expr(value=expr)
 
-    # MODIFIED: expression() parses Lambda first because it has the lowest precedence
     def expression(self) -> ASTNode:
         if self.current_token().type == TokenType.LAMBDA:
             self.eat(TokenType.LAMBDA)
@@ -421,7 +425,6 @@ class Parser:
                 self.eat(TokenType.RPAREN)
                 node = TupleLiteral(elements=elements) if is_tuple else elements[0]
                 
-        # MODIFIED: List Comprehensions intercepts
         elif token.type == TokenType.LBRACKET:
             self.eat(TokenType.LBRACKET)
             if self.current_token().type == TokenType.RBRACKET:
@@ -457,7 +460,6 @@ class Parser:
                     self.eat(TokenType.RBRACKET)
                     node = ListLiteral(elements=elements)
             
-        # MODIFIED: Dict Comprehensions intercepts
         elif token.type == TokenType.LBRACE:
             self.eat(TokenType.LBRACE)
             if self.current_token().type == TokenType.RBRACE:
@@ -502,16 +504,30 @@ class Parser:
             raise SyntaxError(f"Unexpected token: {token.type.name} at line {token.line}")
 
         while self.current_token().type in (TokenType.LPAREN, TokenType.LBRACKET, TokenType.DOT):
+            # MODIFIED: kwargs extraction!
             if self.current_token().type == TokenType.LPAREN:
                 self.eat(TokenType.LPAREN)
                 args = []
+                kwargs = {}
                 if self.current_token().type != TokenType.RPAREN:
-                    args.append(self.expression())
-                    while self.current_token().type == TokenType.COMMA:
-                        self.eat(TokenType.COMMA)
-                        args.append(self.expression())
+                    while True:
+                        # Detect key=value
+                        if self.current_token().type == TokenType.IDENTIFIER and self.peek().type == TokenType.ASSIGN:
+                            key = self.current_token().value
+                            self.eat(TokenType.IDENTIFIER)
+                            self.eat(TokenType.ASSIGN)
+                            kwargs[key] = self.expression()
+                        else:
+                            if kwargs: raise SyntaxError("Positional argument follows keyword argument")
+                            args.append(self.expression())
+                            
+                        if self.current_token().type == TokenType.COMMA:
+                            self.eat(TokenType.COMMA)
+                            if self.current_token().type == TokenType.RPAREN: break
+                        else:
+                            break
                 self.eat(TokenType.RPAREN)
-                node = Call(func=node, args=args)
+                node = Call(func=node, args=args, kwargs=kwargs)
                 
             elif self.current_token().type == TokenType.LBRACKET:
                 self.eat(TokenType.LBRACKET)

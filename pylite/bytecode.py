@@ -22,10 +22,11 @@ class Op(Enum):
     JUMP          = auto()
     MAKE_FUNCTION = auto()
     CALL_FUNCTION = auto()
+    CALL_FUNCTION_KW = auto() # ADDED
     RETURN_VALUE  = auto()
     BUILD_LIST    = auto()
-    BUILD_TUPLE   = auto() # ADDED
-    UNPACK_SEQUENCE = auto() # ADDED
+    BUILD_TUPLE   = auto()
+    UNPACK_SEQUENCE = auto()
     BUILD_DICT    = auto()
     LOAD_INDEX    = auto()
     STORE_INDEX   = auto()
@@ -52,6 +53,7 @@ class Op(Enum):
     STORE_NONLOCAL= auto()
     LIST_APPEND   = auto()
     DICT_SETITEM  = auto()
+
 @dataclass
 class Instruction:
     opcode: Op
