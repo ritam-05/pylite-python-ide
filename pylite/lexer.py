@@ -12,9 +12,9 @@ class TokenType(Enum):
     IF         = auto()
     ELIF       = auto()
     ELSE       = auto()
-    WHILE      = auto()
     FOR        = auto()
     IN         = auto()
+    WHILE      = auto()
     DEF        = auto()
     RETURN     = auto()
     CLASS      = auto()
@@ -23,6 +23,10 @@ class TokenType(Enum):
     AND        = auto()
     OR         = auto()
     NOT        = auto()
+    TRY        = auto() # ADDED
+    EXCEPT     = auto() # ADDED
+    RAISE      = auto() # ADDED
+    AS         = auto() # ADDED
     ASSIGN     = auto()
     PLUS_ASSIGN = auto()
     MINUS_ASSIGN = auto()
@@ -80,7 +84,11 @@ class Lexer:
         'from': TokenType.FROM,
         'and': TokenType.AND,
         'or': TokenType.OR,
-        'not': TokenType.NOT
+        'not': TokenType.NOT,
+        'try': TokenType.TRY,       # ADDED
+        'except': TokenType.EXCEPT, # ADDED
+        'raise': TokenType.RAISE,   # ADDED
+        'as': TokenType.AS          # ADDED
     }
 
     RULES = [

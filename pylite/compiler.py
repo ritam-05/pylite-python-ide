@@ -42,6 +42,8 @@ class Compiler:
         elif isinstance(node, If): self.visit_If(node)
         elif isinstance(node, While): self.visit_While(node)
         elif isinstance(node, For): self.visit_For(node)
+        elif isinstance(node, Try): self.visit_Try(node)       # ADDED
+        elif isinstance(node, Raise): self.visit_Raise(node)   # ADDED
         elif isinstance(node, FunctionDef): self.visit_FunctionDef(node)
         elif isinstance(node, Call): self.visit_Call(node)
         elif isinstance(node, Return): self.visit_Return(node)
@@ -54,6 +56,49 @@ class Compiler:
         elif isinstance(node, Import): self.visit_Import(node)
         elif isinstance(node, ImportFrom): self.visit_ImportFrom(node)
         else: raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
+
+    # ADDED: Exception compilation
+    def visit_Raise(self, node: Raise):
+        self.visit(node.exc)
+        self.emit(Op.RAISE_EXC)
+        
+    def visit_Try(self, node: Try):
+        catch_idx = self.emit(Op.SETUP_CATCH)
+        for stmt in node.body:
+            self.visit(stmt)
+        self.emit(Op.POP_CATCH)
+        jump_end_idx = self.emit(Op.JUMP)
+        
+        # Patch the initial catch to point right here where except blocks begin
+        self.instructions[catch_idx].arg = len(self.instructions)
+        
+        end_jumps = [jump_end_idx]
+        
+        for handler in node.handlers:
+            if handler.type is not None:
+                self.emit(Op.DUP_TOP)
+                self.visit(handler.type)
+                self.emit(Op.CHECK_EXC_MATCH)
+                jump_next_idx = self.emit(Op.JUMP_IF_FALSE)
+                
+                if handler.name: self.emit(Op.STORE_NAME, handler.name)
+                else: self.emit(Op.POP_TOP)
+                    
+                for stmt in handler.body: self.visit(stmt)
+                end_jumps.append(self.emit(Op.JUMP))
+                self.instructions[jump_next_idx].arg = len(self.instructions)
+            else:
+                if handler.name: self.emit(Op.STORE_NAME, handler.name)
+                else: self.emit(Op.POP_TOP)
+                    
+                for stmt in handler.body: self.visit(stmt)
+                end_jumps.append(self.emit(Op.JUMP))
+
+        # Re-raise if no except blocks matched
+        self.emit(Op.RAISE_EXC)
+        
+        for idx in end_jumps:
+            self.instructions[idx].arg = len(self.instructions)
 
     def visit_Expr(self, node: Expr):
         self.visit(node.value)
@@ -75,9 +120,9 @@ class Compiler:
         if node.op == 'not':
             self.emit(Op.UNARY_NOT)
         elif node.op == '-':
-            self.emit(Op.UNARY_NEGATIVE) # MODIFIED
+            self.emit(Op.UNARY_NEGATIVE)
         elif node.op == '+':
-            self.emit(Op.UNARY_POSITIVE) # MODIFIED
+            self.emit(Op.UNARY_POSITIVE)
 
     def visit_BinOp(self, node: BinOp):
         self.visit(node.left)

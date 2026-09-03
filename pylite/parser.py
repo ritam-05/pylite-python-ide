@@ -89,6 +89,53 @@ class Parser:
             self.eat(TokenType.RETURN)
             return Return(value=self.expression())
 
+        # ADDED: Raise Statement
+        if self.current_token().type == TokenType.RAISE:
+            self.eat(TokenType.RAISE)
+            return Raise(exc=self.expression())
+
+        # ADDED: Try/Except Statements
+        if self.current_token().type == TokenType.TRY:
+            self.eat(TokenType.TRY)
+            self.eat(TokenType.COLON)
+            while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+            self.eat(TokenType.INDENT)
+            body = []
+            while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
+                if self.current_token().type == TokenType.NEWLINE:
+                    self.eat(TokenType.NEWLINE); continue
+                body.append(self.statement())
+            if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
+            
+            while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+            
+            handlers = []
+            while self.current_token().type == TokenType.EXCEPT:
+                self.eat(TokenType.EXCEPT)
+                exc_type = None
+                exc_name = None
+                if self.current_token().type != TokenType.COLON:
+                    exc_type = self.expression()
+                    if self.current_token().type == TokenType.AS:
+                        self.eat(TokenType.AS)
+                        exc_name = self.current_token().value
+                        self.eat(TokenType.IDENTIFIER)
+                self.eat(TokenType.COLON)
+                
+                while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+                self.eat(TokenType.INDENT)
+                h_body = []
+                while self.current_token().type not in (TokenType.DEDENT, TokenType.EOF):
+                    if self.current_token().type == TokenType.NEWLINE:
+                        self.eat(TokenType.NEWLINE); continue
+                    h_body.append(self.statement())
+                if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
+                while self.current_token().type == TokenType.NEWLINE: self.eat(TokenType.NEWLINE)
+                
+                handlers.append(ExceptHandler(type=exc_type, name=exc_name, body=h_body))
+                
+            return Try(body=body, handlers=handlers)
+
         if self.current_token().type == TokenType.IF:
             self.eat(TokenType.IF)
             condition = self.expression()
@@ -237,14 +284,13 @@ class Parser:
         return node
 
     def term(self) -> ASTNode:
-        node = self.unary() # MODIFIED: term now defers to unary
+        node = self.unary()
         while self.current_token().type in (TokenType.STAR, TokenType.SLASH, TokenType.DOUBLE_SLASH, TokenType.PERCENT):
             op = self.current_token().value
             self.eat(self.current_token().type)
             node = BinOp(left=node, op=op, right=self.unary())
         return node
 
-    # ADDED: Handle Unary Minus and Plus
     def unary(self) -> ASTNode:
         if self.current_token().type in (TokenType.PLUS, TokenType.MINUS):
             op = self.current_token().value

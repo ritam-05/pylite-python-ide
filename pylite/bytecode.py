@@ -36,11 +36,17 @@ class Op(Enum):
     DUP_TWO       = auto()
     POP_TOP       = auto()
     UNARY_NOT     = auto()
-    UNARY_NEGATIVE = auto() # ADDED
-    UNARY_POSITIVE = auto() # ADDED
+    UNARY_NEGATIVE = auto()
+    UNARY_POSITIVE = auto()
     GET_ITER      = auto()
     FOR_ITER      = auto()
     BUILD_SLICE   = auto()
+    
+    # ADDED FOR EXCEPTIONS
+    SETUP_CATCH   = auto()
+    POP_CATCH     = auto()
+    RAISE_EXC     = auto()
+    CHECK_EXC_MATCH = auto()
 
 @dataclass
 class Instruction:

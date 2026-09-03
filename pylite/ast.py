@@ -14,21 +14,18 @@ class Name(ASTNode): value: str
 @dataclass
 class BinOp(ASTNode): left: ASTNode; op: str; right: ASTNode
 
-
 @dataclass
 class LogicalOp(ASTNode): left: ASTNode; op: str; right: ASTNode
 @dataclass
 class UnaryOp(ASTNode): op: str; operand: ASTNode
 
 @dataclass
-class Expr(ASTNode): value: ASTNode
+class Expr(ASTNode): value: ASTNode 
 
 @dataclass
 class Assign(ASTNode): target: ASTNode; value: ASTNode
 @dataclass
 class AugAssign(ASTNode): target: ASTNode; op: str; value: ASTNode
-@dataclass
-class Slice(ASTNode): lower: ASTNode; upper: ASTNode; step: ASTNode
 @dataclass
 class Call(ASTNode): func: ASTNode; args: List[ASTNode]
 @dataclass
@@ -46,6 +43,8 @@ class ListLiteral(ASTNode): elements: List[ASTNode]
 @dataclass
 class Subscript(ASTNode): obj: ASTNode; index: ASTNode
 @dataclass
+class Slice(ASTNode): lower: ASTNode; upper: ASTNode; step: ASTNode 
+@dataclass
 class DictLiteral(ASTNode): keys: List[ASTNode]; values: List[ASTNode]
 @dataclass
 class ClassDef(ASTNode): name: str; body: List[ASTNode]
@@ -55,3 +54,11 @@ class Attribute(ASTNode): obj: ASTNode; attr: str
 class Import(ASTNode): module: str
 @dataclass
 class ImportFrom(ASTNode): module: str; names: List[str]
+
+# ADDED FOR EXCEPTIONS
+@dataclass
+class ExceptHandler(ASTNode): type: ASTNode; name: str; body: List[ASTNode]
+@dataclass
+class Try(ASTNode): body: List[ASTNode]; handlers: List[ExceptHandler]
+@dataclass
+class Raise(ASTNode): exc: ASTNode
