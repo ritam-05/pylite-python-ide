@@ -226,12 +226,16 @@ class VM:
 
                 # --- CLOSURES AND OOP ---
                 elif instr.opcode == Op.MAKE_FUNCTION:
-                    # Upgrade function to a closure bound to the current environment!
                     self.stack.append(PyLiteClosure(instr.arg, frame.env))
                     
                 elif instr.opcode == Op.BUILD_LIST:
                     count = instr.arg
                     self.stack.append([self.stack.pop() for _ in range(count)][::-1])
+                elif instr.opcode == Op.LIST_APPEND:
+                    val = self.stack.pop()
+                    lst = self.stack[-instr.arg]
+                    lst.append(val)
+                    
                 elif instr.opcode == Op.BUILD_TUPLE:
                     count = instr.arg
                     if count == 0: self.stack.append(())
@@ -241,12 +245,18 @@ class VM:
                     obj = list(self.stack.pop())
                     if len(obj) != count: raise ValueError(f"not enough values to unpack (expected {count}, got {len(obj)})")
                     for item in reversed(obj): self.stack.append(item)
+                    
                 elif instr.opcode == Op.BUILD_DICT:
                     count = instr.arg; d = {}
                     for _ in range(count):
                         v = self.stack.pop(); k = self.stack.pop()
                         d[k] = v
                     self.stack.append(d)
+                elif instr.opcode == Op.DICT_SETITEM:
+                    val = self.stack.pop()
+                    key = self.stack.pop()
+                    dct = self.stack[-instr.arg]
+                    dct[key] = val
                     
                 elif instr.opcode == Op.LOAD_INDEX:
                     idx = self.stack.pop(); obj = self.stack.pop()
@@ -262,11 +272,9 @@ class VM:
                 elif instr.opcode == Op.MAKE_CLASS:
                     name, methods, has_base = instr.arg
                     base_cls = self.stack.pop() if has_base else None
-                    
                     closure_methods = {}
                     for m_name, m_func in methods.items():
                         closure_methods[m_name] = PyLiteClosure(m_func, frame.env)
-                        
                     self.stack.append(PyLiteClass(name, closure_methods, base_cls))
                     
                 elif instr.opcode == Op.LOAD_SUPER:

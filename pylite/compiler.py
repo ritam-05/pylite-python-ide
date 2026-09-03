@@ -11,7 +11,7 @@ class Compiler:
     def emit(self, opcode: Op, arg: Any = None):
         self.instructions.append(Instruction(opcode, arg))
         return len(self.instructions) - 1
-        
+
     def _emit_store(self, name: str):
         if name in self.global_vars: self.emit(Op.STORE_GLOBAL, name)
         elif name in self.nonlocal_vars: self.emit(Op.STORE_NONLOCAL, name)
@@ -51,8 +51,11 @@ class Compiler:
         elif isinstance(node, For): self.visit_For(node)
         elif isinstance(node, Try): self.visit_Try(node)
         elif isinstance(node, Raise): self.visit_Raise(node)
-        elif isinstance(node, Global): self.visit_Global(node)      # ADDED
-        elif isinstance(node, Nonlocal): self.visit_Nonlocal(node)  # ADDED
+        elif isinstance(node, Global): self.visit_Global(node)
+        elif isinstance(node, Nonlocal): self.visit_Nonlocal(node)
+        elif isinstance(node, Lambda): self.visit_Lambda(node)
+        elif isinstance(node, ListComp): self.visit_ListComp(node)
+        elif isinstance(node, DictComp): self.visit_DictComp(node)
         elif isinstance(node, FunctionDef): self.visit_FunctionDef(node)
         elif isinstance(node, Call): self.visit_Call(node)
         elif isinstance(node, Return): self.visit_Return(node)
@@ -206,6 +209,66 @@ class Compiler:
         for stmt in node.body: self.visit(stmt)
         self.emit(Op.JUMP, start_idx)
         self.instructions[jump_end_idx].arg = len(self.instructions)
+
+    def visit_Lambda(self, node: Lambda):
+        func_comp = Compiler()
+        func_comp.visit(node.body)
+        func_comp.emit(Op.RETURN_VALUE)
+        func = PyLiteFunction("<lambda>", node.params, func_comp.instructions)
+        self.emit(Op.MAKE_FUNCTION, func)
+        
+    def visit_ListComp(self, node: ListComp):
+        self.emit(Op.BUILD_LIST, 0)
+        self.visit(node.iter)
+        self.emit(Op.GET_ITER)
+        
+        loop_start = len(self.instructions)
+        jump_end = self.emit(Op.FOR_ITER)
+        
+        if isinstance(node.target, Name):
+            self._emit_store(node.target.value)
+        elif isinstance(node.target, TupleLiteral):
+            self.emit(Op.UNPACK_SEQUENCE, len(node.target.elements))
+            for el in node.target.elements:
+                if isinstance(el, Name): self._emit_store(el.value)
+                else: raise SyntaxError("Unsupported tuple unpacking in list comp")
+                
+        for cond in node.ifs:
+            self.visit(cond)
+            self.emit(Op.JUMP_IF_FALSE, loop_start)
+            
+        self.visit(node.elt)
+        self.emit(Op.LIST_APPEND, 2)
+        
+        self.emit(Op.JUMP, loop_start)
+        self.instructions[jump_end].arg = len(self.instructions)
+
+    def visit_DictComp(self, node: DictComp):
+        self.emit(Op.BUILD_DICT, 0)
+        self.visit(node.iter)
+        self.emit(Op.GET_ITER)
+        
+        loop_start = len(self.instructions)
+        jump_end = self.emit(Op.FOR_ITER)
+        
+        if isinstance(node.target, Name):
+            self._emit_store(node.target.value)
+        elif isinstance(node.target, TupleLiteral):
+            self.emit(Op.UNPACK_SEQUENCE, len(node.target.elements))
+            for el in node.target.elements:
+                if isinstance(el, Name): self._emit_store(el.value)
+                else: raise SyntaxError("Unsupported tuple unpacking in dict comp")
+                
+        for cond in node.ifs:
+            self.visit(cond)
+            self.emit(Op.JUMP_IF_FALSE, loop_start)
+            
+        self.visit(node.key)
+        self.visit(node.value)
+        self.emit(Op.DICT_SETITEM, 2)
+        
+        self.emit(Op.JUMP, loop_start)
+        self.instructions[jump_end].arg = len(self.instructions)
 
     def visit_FunctionDef(self, node: FunctionDef):
         func_comp = Compiler()

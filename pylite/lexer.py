@@ -19,8 +19,9 @@ class TokenType(Enum):
     RETURN     = auto()
     CLASS      = auto()
     SUPER      = auto()
-    GLOBAL     = auto() # ADDED
-    NONLOCAL   = auto() # ADDED
+    GLOBAL     = auto()
+    NONLOCAL   = auto()
+    LAMBDA     = auto() # ADDED
     IMPORT     = auto()
     FROM       = auto()
     AND        = auto()
@@ -84,8 +85,9 @@ class Lexer:
         'return': TokenType.RETURN,
         'class': TokenType.CLASS,
         'super': TokenType.SUPER,
-        'global': TokenType.GLOBAL,     # ADDED
-        'nonlocal': TokenType.NONLOCAL, # ADDED
+        'global': TokenType.GLOBAL,
+        'nonlocal': TokenType.NONLOCAL,
+        'lambda': TokenType.LAMBDA, # ADDED
         'import': TokenType.IMPORT,
         'from': TokenType.FROM,
         'and': TokenType.AND,

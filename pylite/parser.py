@@ -302,7 +302,22 @@ class Parser:
             
         return Expr(value=expr)
 
+    # MODIFIED: expression() parses Lambda first because it has the lowest precedence
     def expression(self) -> ASTNode:
+        if self.current_token().type == TokenType.LAMBDA:
+            self.eat(TokenType.LAMBDA)
+            params = []
+            if self.current_token().type != TokenType.COLON:
+                params.append(self.current_token().value)
+                self.eat(TokenType.IDENTIFIER)
+                while self.current_token().type == TokenType.COMMA:
+                    self.eat(TokenType.COMMA)
+                    params.append(self.current_token().value)
+                    self.eat(TokenType.IDENTIFIER)
+            self.eat(TokenType.COLON)
+            body = self.expression()
+            return Lambda(params=params, body=body)
+            
         return self.logic_or()
 
     def logic_or(self) -> ASTNode:
@@ -406,32 +421,83 @@ class Parser:
                 self.eat(TokenType.RPAREN)
                 node = TupleLiteral(elements=elements) if is_tuple else elements[0]
                 
+        # MODIFIED: List Comprehensions intercepts
         elif token.type == TokenType.LBRACKET:
             self.eat(TokenType.LBRACKET)
-            elements = []
-            if self.current_token().type != TokenType.RBRACKET:
-                elements.append(self.expression())
-                while self.current_token().type == TokenType.COMMA:
-                    self.eat(TokenType.COMMA)
-                    if self.current_token().type == TokenType.RBRACKET: break
-                    elements.append(self.expression())
-            self.eat(TokenType.RBRACKET)
-            node = ListLiteral(elements=elements)
+            if self.current_token().type == TokenType.RBRACKET:
+                self.eat(TokenType.RBRACKET)
+                node = ListLiteral(elements=[])
+            else:
+                first_expr = self.expression()
+                if self.current_token().type == TokenType.FOR:
+                    self.eat(TokenType.FOR)
+                    targets = [self.expression()]
+                    while self.current_token().type == TokenType.COMMA:
+                        self.eat(TokenType.COMMA)
+                        if self.current_token().type == TokenType.IN: break
+                        targets.append(self.expression())
+                        
+                    target = TupleLiteral(elements=targets) if len(targets) > 1 else targets[0]
+                    self.eat(TokenType.IN)
+                    iter_node = self.expression()
+                    
+                    ifs = []
+                    while self.current_token().type == TokenType.IF:
+                        self.eat(TokenType.IF)
+                        ifs.append(self.expression())
+                        
+                    self.eat(TokenType.RBRACKET)
+                    node = ListComp(elt=first_expr, target=target, iter=iter_node, ifs=ifs)
+                else:
+                    elements = [first_expr]
+                    while self.current_token().type == TokenType.COMMA:
+                        self.eat(TokenType.COMMA)
+                        if self.current_token().type == TokenType.RBRACKET: break
+                        elements.append(self.expression())
+                    self.eat(TokenType.RBRACKET)
+                    node = ListLiteral(elements=elements)
             
+        # MODIFIED: Dict Comprehensions intercepts
         elif token.type == TokenType.LBRACE:
             self.eat(TokenType.LBRACE)
-            keys = []; values = []
-            if self.current_token().type != TokenType.RBRACE:
-                keys.append(self.expression())
+            if self.current_token().type == TokenType.RBRACE:
+                self.eat(TokenType.RBRACE)
+                node = DictLiteral(keys=[], values=[])
+            else:
+                first_key = self.expression()
                 self.eat(TokenType.COLON)
-                values.append(self.expression())
-                while self.current_token().type == TokenType.COMMA:
-                    self.eat(TokenType.COMMA)
-                    keys.append(self.expression())
-                    self.eat(TokenType.COLON)
-                    values.append(self.expression())
-            self.eat(TokenType.RBRACE)
-            node = DictLiteral(keys=keys, values=values)
+                first_val = self.expression()
+                
+                if self.current_token().type == TokenType.FOR:
+                    self.eat(TokenType.FOR)
+                    targets = [self.expression()]
+                    while self.current_token().type == TokenType.COMMA:
+                        self.eat(TokenType.COMMA)
+                        if self.current_token().type == TokenType.IN: break
+                        targets.append(self.expression())
+                        
+                    target = TupleLiteral(elements=targets) if len(targets) > 1 else targets[0]
+                    self.eat(TokenType.IN)
+                    iter_node = self.expression()
+                    
+                    ifs = []
+                    while self.current_token().type == TokenType.IF:
+                        self.eat(TokenType.IF)
+                        ifs.append(self.expression())
+                        
+                    self.eat(TokenType.RBRACE)
+                    node = DictComp(key=first_key, value=first_val, target=target, iter=iter_node, ifs=ifs)
+                else:
+                    keys = [first_key]
+                    values = [first_val]
+                    while self.current_token().type == TokenType.COMMA:
+                        self.eat(TokenType.COMMA)
+                        if self.current_token().type == TokenType.RBRACE: break
+                        keys.append(self.expression())
+                        self.eat(TokenType.COLON)
+                        values.append(self.expression())
+                    self.eat(TokenType.RBRACE)
+                    node = DictLiteral(keys=keys, values=values)
         else:
             raise SyntaxError(f"Unexpected token: {token.type.name} at line {token.line}")
 

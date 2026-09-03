@@ -50,7 +50,8 @@ class Op(Enum):
     LOAD_SUPER    = auto()
     STORE_GLOBAL  = auto()
     STORE_NONLOCAL= auto()
-
+    LIST_APPEND   = auto()
+    DICT_SETITEM  = auto()
 @dataclass
 class Instruction:
     opcode: Op

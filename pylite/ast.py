@@ -65,3 +65,16 @@ class Raise(ASTNode): exc: ASTNode
 class Global(ASTNode): names: List[str]
 @dataclass
 class Nonlocal(ASTNode): names: List[str]
+# ... (At the bottom of ast.py, add these nodes) ...
+@dataclass
+class Global(ASTNode): names: List[str]
+@dataclass
+class Nonlocal(ASTNode): names: List[str]
+
+# ADDED FOR SUGAR
+@dataclass
+class Lambda(ASTNode): params: List[str]; body: ASTNode
+@dataclass
+class ListComp(ASTNode): elt: ASTNode; target: ASTNode; iter: ASTNode; ifs: List[ASTNode]
+@dataclass
+class DictComp(ASTNode): key: ASTNode; value: ASTNode; target: ASTNode; iter: ASTNode; ifs: List[ASTNode]
