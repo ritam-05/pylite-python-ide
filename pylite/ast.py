@@ -61,3 +61,7 @@ class ExceptHandler(ASTNode): type: ASTNode; name: str; body: List[ASTNode]
 class Try(ASTNode): body: List[ASTNode]; handlers: List[ExceptHandler]
 @dataclass
 class Raise(ASTNode): exc: ASTNode
+@dataclass
+class Global(ASTNode): names: List[str]
+@dataclass
+class Nonlocal(ASTNode): names: List[str]

@@ -2,12 +2,40 @@ import importlib
 from typing import Any, List, Dict
 from pylite.bytecode import Op, PyLiteFunction
 
+class Environment:
+    def __init__(self, parent=None, initial=None):
+        self.vars = initial if initial is not None else {}
+        self.parent = parent
+        
+    def get(self, name, vm_globals):
+        if name in self.vars: return self.vars[name]
+        if self.parent: return self.parent.get(name, vm_globals)
+        if name in vm_globals: return vm_globals[name]
+        raise NameError(f"name '{name}' is not defined")
+        
+    def set_nonlocal(self, name, val):
+        if self.parent and self.parent._set_nonlocal(name, val): return
+        raise SyntaxError(f"no binding for nonlocal '{name}' found")
+        
+    def _set_nonlocal(self, name, val):
+        if name in self.vars:
+            self.vars[name] = val
+            return True
+        if self.parent:
+            return self.parent._set_nonlocal(name, val)
+        return False
+
 class CallFrame:
-    def __init__(self, func: PyLiteFunction, env: Dict[str, Any]):
+    def __init__(self, func: PyLiteFunction, env: Environment):
         self.func = func
         self.ip = 0
         self.env = env
         self.catch_blocks = []
+
+class PyLiteClosure:
+    def __init__(self, func: PyLiteFunction, env: Environment):
+        self.func = func
+        self.env = env
 
 class PyLiteClass:
     def __init__(self, name: str, methods: dict, base: 'PyLiteClass' = None):
@@ -34,8 +62,7 @@ class BoundMethod:
     def __init__(self, inst, func):
         self.inst = inst
         self.func = func
-    def __call__(self, *args):
-        pass # VM handles this directly
+    def __call__(self, *args): pass
 
 class VM:
     def __init__(self, stdout_write=None):
@@ -80,13 +107,15 @@ class VM:
 
     def _call_magic(self, obj, method_name, *args):
         if not isinstance(obj, PyLiteInstance): return NotImplemented
-        func = obj.cls.get_method(method_name)
-        if not func: return NotImplemented
-        env = dict(zip(func.params, [obj, *args]))
-        return self._execute_loop([CallFrame(func, env)])
+        closure = obj.cls.get_method(method_name)
+        if not closure: return NotImplemented
+        env = Environment(parent=closure.env, initial=dict(zip(closure.func.params, [obj, *args])))
+        return self._execute_loop([CallFrame(closure.func, env)])
 
     def run(self, main_func: PyLiteFunction) -> Any:
-        return self._execute_loop([CallFrame(main_func, self.globals)])
+        # At top level, self.vars IS self.globals. STORE_NAME natively writes to global!
+        env = Environment(parent=None, initial=self.globals)
+        return self._execute_loop([CallFrame(main_func, env)])
 
     def _execute_loop(self, frames: List[CallFrame]) -> Any:
         instruction_count = 0
@@ -108,12 +137,12 @@ class VM:
             try:
                 if instr.opcode == Op.LOAD_CONST: self.stack.append(instr.arg)
                 elif instr.opcode == Op.LOAD_NAME:
-                    name = instr.arg
-                    if name in frame.env: self.stack.append(frame.env[name])
-                    elif name in self.globals: self.stack.append(self.globals[name])
-                    else: raise NameError(f"name '{name}' is not defined")
-                elif instr.opcode == Op.STORE_NAME:
-                    frame.env[instr.arg] = self.stack.pop()
+                    self.stack.append(frame.env.get(instr.arg, self.globals))
+                    
+                # Variable Storage Scopes
+                elif instr.opcode == Op.STORE_NAME: frame.env.vars[instr.arg] = self.stack.pop()
+                elif instr.opcode == Op.STORE_GLOBAL: self.globals[instr.arg] = self.stack.pop()
+                elif instr.opcode == Op.STORE_NONLOCAL: frame.env.set_nonlocal(instr.arg, self.stack.pop())
                     
                 # --- ARITHMETIC WITH MAGIC METHODS ---
                 elif instr.opcode == Op.ADD:
@@ -195,31 +224,23 @@ class VM:
                     exc_type = self.stack.pop(); exc_inst = self.stack.pop()
                     self.stack.append(isinstance(exc_inst, exc_type))
 
+                # --- CLOSURES AND OOP ---
                 elif instr.opcode == Op.MAKE_FUNCTION:
-                    self.stack.append(instr.arg)
+                    # Upgrade function to a closure bound to the current environment!
+                    self.stack.append(PyLiteClosure(instr.arg, frame.env))
                     
                 elif instr.opcode == Op.BUILD_LIST:
                     count = instr.arg
                     self.stack.append([self.stack.pop() for _ in range(count)][::-1])
-                    
-                # ADDED: BUILD_TUPLE and UNPACK_SEQUENCE
                 elif instr.opcode == Op.BUILD_TUPLE:
                     count = instr.arg
-                    if count == 0:
-                        self.stack.append(())
-                    else:
-                        items = [self.stack.pop() for _ in range(count)][::-1]
-                        self.stack.append(tuple(items))
-                        
+                    if count == 0: self.stack.append(())
+                    else: self.stack.append(tuple([self.stack.pop() for _ in range(count)][::-1]))
                 elif instr.opcode == Op.UNPACK_SEQUENCE:
                     count = instr.arg
-                    obj = self.stack.pop()
-                    items = list(obj)
-                    if len(items) != count:
-                        raise ValueError(f"not enough values to unpack (expected {count}, got {len(items)})")
-                    for item in reversed(items):
-                        self.stack.append(item)
-                        
+                    obj = list(self.stack.pop())
+                    if len(obj) != count: raise ValueError(f"not enough values to unpack (expected {count}, got {len(obj)})")
+                    for item in reversed(obj): self.stack.append(item)
                 elif instr.opcode == Op.BUILD_DICT:
                     count = instr.arg; d = {}
                     for _ in range(count):
@@ -227,7 +248,6 @@ class VM:
                         d[k] = v
                     self.stack.append(d)
                     
-                # --- INDEXING WITH MAGIC METHODS ---
                 elif instr.opcode == Op.LOAD_INDEX:
                     idx = self.stack.pop(); obj = self.stack.pop()
                     res = self._call_magic(obj, "__getitem__", idx)
@@ -239,14 +259,18 @@ class VM:
                     res = self._call_magic(obj, "__setitem__", idx, val)
                     if res is NotImplemented: obj[idx] = val
 
-                # --- OOP & SUPER ---
                 elif instr.opcode == Op.MAKE_CLASS:
                     name, methods, has_base = instr.arg
                     base_cls = self.stack.pop() if has_base else None
-                    self.stack.append(PyLiteClass(name, methods, base_cls))
+                    
+                    closure_methods = {}
+                    for m_name, m_func in methods.items():
+                        closure_methods[m_name] = PyLiteClosure(m_func, frame.env)
+                        
+                    self.stack.append(PyLiteClass(name, closure_methods, base_cls))
                     
                 elif instr.opcode == Op.LOAD_SUPER:
-                    inst = frame.env.get("self")
+                    inst = frame.env.get("self", self.globals)
                     if not isinstance(inst, PyLiteInstance) or not inst.cls.base:
                         raise RuntimeError("super() failed: not inside derived class")
                     self.stack.append(PyLiteSuper(inst, inst.cls.base))
@@ -292,19 +316,19 @@ class VM:
                         self.stack.append(inst) 
                         init_m = func.get_method("__init__")
                         if init_m:
-                            env = dict(zip(init_m.params, [inst] + args))
-                            self._execute_loop([CallFrame(init_m, env)])
+                            env = Environment(parent=init_m.env, initial=dict(zip(init_m.func.params, [inst] + args)))
+                            self._execute_loop([CallFrame(init_m.func, env)])
                             
                     elif isinstance(func, BoundMethod):
-                        env = dict(zip(func.func.params, [func.inst] + args))
-                        frames.append(CallFrame(func.func, env))
+                        env = Environment(parent=func.func.env, initial=dict(zip(func.func.func.params, [func.inst] + args)))
+                        frames.append(CallFrame(func.func.func, env))
                         
                     elif callable(func):
                         self.stack.append(func(*args))
                         
-                    elif isinstance(func, PyLiteFunction):
-                        env = dict(zip(func.params, args))
-                        frames.append(CallFrame(func, env))
+                    elif isinstance(func, PyLiteClosure):
+                        env = Environment(parent=func.env, initial=dict(zip(func.func.params, args)))
+                        frames.append(CallFrame(func.func, env))
                         
                     else: raise TypeError("Not callable")
                     

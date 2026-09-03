@@ -49,6 +49,26 @@ class Parser:
             if self.current_token().type == TokenType.DEDENT: self.eat(TokenType.DEDENT)
             return ClassDef(name=name, body=body, base=base)
 
+        if self.current_token().type == TokenType.GLOBAL:
+            self.eat(TokenType.GLOBAL)
+            names = [self.current_token().value]
+            self.eat(TokenType.IDENTIFIER)
+            while self.current_token().type == TokenType.COMMA:
+                self.eat(TokenType.COMMA)
+                names.append(self.current_token().value)
+                self.eat(TokenType.IDENTIFIER)
+            return Global(names=names)
+            
+        if self.current_token().type == TokenType.NONLOCAL:
+            self.eat(TokenType.NONLOCAL)
+            names = [self.current_token().value]
+            self.eat(TokenType.IDENTIFIER)
+            while self.current_token().type == TokenType.COMMA:
+                self.eat(TokenType.COMMA)
+                names.append(self.current_token().value)
+                self.eat(TokenType.IDENTIFIER)
+            return Nonlocal(names=names)
+
         if self.current_token().type == TokenType.IMPORT:
             self.eat(TokenType.IMPORT)
             module = self.current_token().value
@@ -386,7 +406,6 @@ class Parser:
                 self.eat(TokenType.RPAREN)
                 node = TupleLiteral(elements=elements) if is_tuple else elements[0]
                 
-        # MODIFIED: Proper List literal definition parsing
         elif token.type == TokenType.LBRACKET:
             self.eat(TokenType.LBRACKET)
             elements = []

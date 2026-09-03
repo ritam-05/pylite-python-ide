@@ -5,10 +5,17 @@ from pylite.bytecode import Op, Instruction, PyLiteFunction
 class Compiler:
     def __init__(self):
         self.instructions: List[Instruction] = []
+        self.global_vars = set()
+        self.nonlocal_vars = set()
 
     def emit(self, opcode: Op, arg: Any = None):
         self.instructions.append(Instruction(opcode, arg))
         return len(self.instructions) - 1
+        
+    def _emit_store(self, name: str):
+        if name in self.global_vars: self.emit(Op.STORE_GLOBAL, name)
+        elif name in self.nonlocal_vars: self.emit(Op.STORE_NONLOCAL, name)
+        else: self.emit(Op.STORE_NAME, name)
 
     def compile(self, statements: List[ASTNode]) -> PyLiteFunction:
         self.instructions = []
@@ -44,11 +51,13 @@ class Compiler:
         elif isinstance(node, For): self.visit_For(node)
         elif isinstance(node, Try): self.visit_Try(node)
         elif isinstance(node, Raise): self.visit_Raise(node)
+        elif isinstance(node, Global): self.visit_Global(node)      # ADDED
+        elif isinstance(node, Nonlocal): self.visit_Nonlocal(node)  # ADDED
         elif isinstance(node, FunctionDef): self.visit_FunctionDef(node)
         elif isinstance(node, Call): self.visit_Call(node)
         elif isinstance(node, Return): self.visit_Return(node)
         elif isinstance(node, ListLiteral): self.visit_ListLiteral(node)
-        elif isinstance(node, TupleLiteral): self.visit_TupleLiteral(node) # ADDED
+        elif isinstance(node, TupleLiteral): self.visit_TupleLiteral(node)
         elif isinstance(node, DictLiteral): self.visit_DictLiteral(node)
         elif isinstance(node, Subscript): self.visit_Subscript(node)
         elif isinstance(node, Slice): self.visit_Slice(node)
@@ -58,6 +67,12 @@ class Compiler:
         elif isinstance(node, Import): self.visit_Import(node)
         elif isinstance(node, ImportFrom): self.visit_ImportFrom(node)
         else: raise NotImplementedError(f"Compiler missing: {type(node).__name__}")
+
+    def visit_Global(self, node: Global):
+        self.global_vars.update(node.names)
+        
+    def visit_Nonlocal(self, node: Nonlocal):
+        self.nonlocal_vars.update(node.names)
 
     def visit_Raise(self, node: Raise):
         self.visit(node.exc)
@@ -79,14 +94,14 @@ class Compiler:
                 self.emit(Op.CHECK_EXC_MATCH)
                 jump_next_idx = self.emit(Op.JUMP_IF_FALSE)
                 
-                if handler.name: self.emit(Op.STORE_NAME, handler.name)
+                if handler.name: self._emit_store(handler.name)
                 else: self.emit(Op.POP_TOP)
                     
                 for stmt in handler.body: self.visit(stmt)
                 end_jumps.append(self.emit(Op.JUMP))
                 self.instructions[jump_next_idx].arg = len(self.instructions)
             else:
-                if handler.name: self.emit(Op.STORE_NAME, handler.name)
+                if handler.name: self._emit_store(handler.name)
                 else: self.emit(Op.POP_TOP)
                     
                 for stmt in handler.body: self.visit(stmt)
@@ -127,15 +142,15 @@ class Compiler:
     def visit_Assign(self, node: Assign):
         self.visit(node.value)
         if isinstance(node.target, Name):
-            self.emit(Op.STORE_NAME, node.target.value)
+            self._emit_store(node.target.value)
         elif isinstance(node.target, Subscript):
             self.visit(node.target.obj); self.visit(node.target.index); self.emit(Op.STORE_INDEX)
         elif isinstance(node.target, Attribute):
             self.visit(node.target.obj); self.emit(Op.STORE_ATTR, node.target.attr)
-        elif isinstance(node.target, TupleLiteral): # MODIFIED: UNPACKING
+        elif isinstance(node.target, TupleLiteral):
             self.emit(Op.UNPACK_SEQUENCE, len(node.target.elements))
             for el in node.target.elements:
-                if isinstance(el, Name): self.emit(Op.STORE_NAME, el.value)
+                if isinstance(el, Name): self._emit_store(el.value)
                 elif isinstance(el, Subscript): self.visit(el.obj); self.visit(el.index); self.emit(Op.STORE_INDEX)
                 elif isinstance(el, Attribute): self.visit(el.obj); self.emit(Op.STORE_ATTR, el.attr)
                 else: raise SyntaxError("Cannot assign to this target inside a tuple")
@@ -143,7 +158,10 @@ class Compiler:
     def visit_AugAssign(self, node: AugAssign):
         base_op = node.op[:-1]
         if isinstance(node.target, Name):
-            self.emit(Op.LOAD_NAME, node.target.value); self.visit(node.value); self._emit_binop(base_op); self.emit(Op.STORE_NAME, node.target.value)
+            self.emit(Op.LOAD_NAME, node.target.value)
+            self.visit(node.value)
+            self._emit_binop(base_op)
+            self._emit_store(node.target.value)
         elif isinstance(node.target, Subscript):
             self.visit(node.target.obj); self.visit(node.target.index); self.emit(Op.DUP_TWO); self.emit(Op.LOAD_INDEX); self.visit(node.value); self._emit_binop(base_op); self.emit(Op.STORE_INDEX)
         elif isinstance(node.target, Attribute):
@@ -176,12 +194,12 @@ class Compiler:
         jump_end_idx = self.emit(Op.FOR_ITER)
         
         if isinstance(node.target, Name):
-            self.emit(Op.STORE_NAME, node.target.value)
-        elif isinstance(node.target, TupleLiteral): # MODIFIED: UNPACKING in loops
+            self._emit_store(node.target.value)
+        elif isinstance(node.target, TupleLiteral):
             self.emit(Op.UNPACK_SEQUENCE, len(node.target.elements))
             for el in node.target.elements:
-                if isinstance(el, Name): self.emit(Op.STORE_NAME, el.value)
-                else: raise SyntaxError("Only simple variables supported in tuple unpacking for loops")
+                if isinstance(el, Name): self._emit_store(el.value)
+                else: raise SyntaxError("Only simple variables supported in tuple unpacking")
         else:
             raise SyntaxError("Unsupported for-loop target")
             
@@ -196,7 +214,7 @@ class Compiler:
             func_comp.emit(Op.LOAD_CONST, None); func_comp.emit(Op.RETURN_VALUE)
         func = PyLiteFunction(node.name, node.params, func_comp.instructions)
         self.emit(Op.MAKE_FUNCTION, func)
-        self.emit(Op.STORE_NAME, node.name)
+        self._emit_store(node.name)
 
     def visit_Return(self, node: Return):
         self.visit(node.value); self.emit(Op.RETURN_VALUE)
@@ -210,7 +228,6 @@ class Compiler:
         for el in node.elements: self.visit(el)
         self.emit(Op.BUILD_LIST, len(node.elements))
 
-    # ADDED
     def visit_TupleLiteral(self, node: TupleLiteral):
         for el in node.elements: self.visit(el)
         self.emit(Op.BUILD_TUPLE, len(node.elements))
@@ -246,14 +263,14 @@ class Compiler:
                     fc.emit(Op.LOAD_CONST, None); fc.emit(Op.RETURN_VALUE)
                 methods[stmt.name] = PyLiteFunction(stmt.name, stmt.params, fc.instructions)
         self.emit(Op.MAKE_CLASS, (node.name, methods, bool(node.base)))
-        self.emit(Op.STORE_NAME, node.name)
+        self._emit_store(node.name)
 
     def visit_Attribute(self, node: Attribute):
         self.visit(node.obj); self.emit(Op.LOAD_ATTR, node.attr)
 
     def visit_Import(self, node: Import):
-        self.emit(Op.IMPORT_NAME, node.module); self.emit(Op.STORE_NAME, node.module)
+        self.emit(Op.IMPORT_NAME, node.module); self._emit_store(node.module)
 
     def visit_ImportFrom(self, node: ImportFrom):
         self.emit(Op.IMPORT_FROM, (node.module, node.names))
-        for name in reversed(node.names): self.emit(Op.STORE_NAME, name)
+        for name in reversed(node.names): self._emit_store(name)

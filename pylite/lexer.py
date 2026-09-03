@@ -19,6 +19,8 @@ class TokenType(Enum):
     RETURN     = auto()
     CLASS      = auto()
     SUPER      = auto()
+    GLOBAL     = auto() # ADDED
+    NONLOCAL   = auto() # ADDED
     IMPORT     = auto()
     FROM       = auto()
     AND        = auto()
@@ -82,6 +84,8 @@ class Lexer:
         'return': TokenType.RETURN,
         'class': TokenType.CLASS,
         'super': TokenType.SUPER,
+        'global': TokenType.GLOBAL,     # ADDED
+        'nonlocal': TokenType.NONLOCAL, # ADDED
         'import': TokenType.IMPORT,
         'from': TokenType.FROM,
         'and': TokenType.AND,
@@ -151,12 +155,9 @@ class Lexer:
             elif kind == 'MISMATCH':
                 raise SyntaxError(f"Unexpected character '{value}' at line {line}")
             elif kind == 'NEWLINE':
-                # MODIFIED: Lookahead to see if the next line is completely blank or a comment
                 next_char = self.source_code[match.end():match.end()+1]
                 if next_char in ('\r', '\n', '#') or next_char == '':
-                    # It's a blank line, so just advance the line counter and ignore its indentation
                     line += 1
-                    # Update line_start to account for the newline character(s) we just skipped
                     line_start = match.end() - len(value.replace('\r', '').replace('\n', ''))
                     continue
 

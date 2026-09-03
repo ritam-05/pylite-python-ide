@@ -48,6 +48,8 @@ class Op(Enum):
     RAISE_EXC     = auto()
     CHECK_EXC_MATCH = auto()
     LOAD_SUPER    = auto()
+    STORE_GLOBAL  = auto()
+    STORE_NONLOCAL= auto()
 
 @dataclass
 class Instruction:
