@@ -10,7 +10,6 @@ class CallFrame:
         self.catch_blocks = []
 
 class PyLiteClass:
-    # MODIFIED: Base inheritance lookup
     def __init__(self, name: str, methods: dict, base: 'PyLiteClass' = None):
         self.name = name
         self.methods = methods
@@ -26,7 +25,6 @@ class PyLiteInstance:
         self.cls = cls
         self.attrs = {}
 
-# ADDED: Wrapper for super() calls
 class PyLiteSuper:
     def __init__(self, inst: PyLiteInstance, base_cls: PyLiteClass):
         self.inst = inst
@@ -36,7 +34,8 @@ class BoundMethod:
     def __init__(self, inst, func):
         self.inst = inst
         self.func = func
-    def __call__(self, *args): pass 
+    def __call__(self, *args):
+        pass # VM handles this directly
 
 class VM:
     def __init__(self, stdout_write=None):
@@ -44,7 +43,6 @@ class VM:
         self.should_stop = False
         self.stdout_write = stdout_write or (lambda text: print(text, end=""))
 
-        # MODIFIED: Intercept print for __str__
         def pylite_print(*args):
             out = []
             for a in args:
@@ -57,7 +55,6 @@ class VM:
             text = " ".join(out) + "\n"
             self.stdout_write(text)
             
-        # MODIFIED: Intercept len for __len__
         def pylite_len(obj):
             if isinstance(obj, PyLiteInstance):
                 res = self._call_magic(obj, "__len__")
@@ -69,7 +66,10 @@ class VM:
             "len": pylite_len,
             "set": set,
             "list": list,
+            "tuple": tuple,
             "range": range,
+            "min": min,
+            "max": max,
             "Exception": Exception,
             "ValueError": ValueError,
             "TypeError": TypeError,
@@ -78,7 +78,6 @@ class VM:
             "ZeroDivisionError": ZeroDivisionError
         }
 
-    # ADDED: Synchronous magic method execution
     def _call_magic(self, obj, method_name, *args):
         if not isinstance(obj, PyLiteInstance): return NotImplemented
         func = obj.cls.get_method(method_name)
@@ -198,9 +197,29 @@ class VM:
 
                 elif instr.opcode == Op.MAKE_FUNCTION:
                     self.stack.append(instr.arg)
+                    
                 elif instr.opcode == Op.BUILD_LIST:
                     count = instr.arg
                     self.stack.append([self.stack.pop() for _ in range(count)][::-1])
+                    
+                # ADDED: BUILD_TUPLE and UNPACK_SEQUENCE
+                elif instr.opcode == Op.BUILD_TUPLE:
+                    count = instr.arg
+                    if count == 0:
+                        self.stack.append(())
+                    else:
+                        items = [self.stack.pop() for _ in range(count)][::-1]
+                        self.stack.append(tuple(items))
+                        
+                elif instr.opcode == Op.UNPACK_SEQUENCE:
+                    count = instr.arg
+                    obj = self.stack.pop()
+                    items = list(obj)
+                    if len(items) != count:
+                        raise ValueError(f"not enough values to unpack (expected {count}, got {len(items)})")
+                    for item in reversed(items):
+                        self.stack.append(item)
+                        
                 elif instr.opcode == Op.BUILD_DICT:
                     count = instr.arg; d = {}
                     for _ in range(count):

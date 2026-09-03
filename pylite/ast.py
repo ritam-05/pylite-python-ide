@@ -38,18 +38,17 @@ class Return(ASTNode): value: ASTNode
 @dataclass
 class ListLiteral(ASTNode): elements: List[ASTNode]
 @dataclass
+class TupleLiteral(ASTNode): elements: List[ASTNode] # ADDED
+@dataclass
 class Subscript(ASTNode): obj: ASTNode; index: ASTNode
 @dataclass
 class Slice(ASTNode): lower: ASTNode; upper: ASTNode; step: ASTNode 
 @dataclass
 class DictLiteral(ASTNode): keys: List[ASTNode]; values: List[ASTNode]
-
 @dataclass
-class ClassDef(ASTNode): name: str; body: List[ASTNode]; base: str = None # MODIFIED
-
+class ClassDef(ASTNode): name: str; body: List[ASTNode]; base: str = None
 @dataclass
-class Super(ASTNode): pass # ADDED
-
+class Super(ASTNode): pass
 @dataclass
 class Attribute(ASTNode): obj: ASTNode; attr: str
 @dataclass

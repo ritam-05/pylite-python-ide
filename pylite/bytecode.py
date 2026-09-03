@@ -24,6 +24,8 @@ class Op(Enum):
     CALL_FUNCTION = auto()
     RETURN_VALUE  = auto()
     BUILD_LIST    = auto()
+    BUILD_TUPLE   = auto() # ADDED
+    UNPACK_SEQUENCE = auto() # ADDED
     BUILD_DICT    = auto()
     LOAD_INDEX    = auto()
     STORE_INDEX   = auto()
@@ -45,7 +47,7 @@ class Op(Enum):
     POP_CATCH     = auto()
     RAISE_EXC     = auto()
     CHECK_EXC_MATCH = auto()
-    LOAD_SUPER    = auto() # ADDED
+    LOAD_SUPER    = auto()
 
 @dataclass
 class Instruction:
