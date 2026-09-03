@@ -7,6 +7,7 @@ import os
 import datetime
 import threading
 import queue
+import re
 
 from pylite.lexer import Lexer
 from pylite.parser import Parser
@@ -100,7 +101,6 @@ class PyLiteIDE:
         self.editor = tk.Text(paned, font=self.font, undo=True, padx=10, pady=10, borderwidth=0, relief=tk.FLAT)
         paned.add(self.editor, stretch="always", minsize=200)
         
-        # ADDED: Bind the Return (Enter) key to our custom auto-indent handler
         self.editor.bind("<Return>", self._handle_return)
         
         self.console = tk.Text(paned, font=self.font, state=tk.DISABLED, padx=10, pady=10, borderwidth=0, relief=tk.FLAT)
@@ -118,25 +118,18 @@ print("Hello from the EXE!")
 """
         self.editor.insert("1.0", sample_code)
 
-    # ADDED: The Automatic Indentation Logic
     def _handle_return(self, event):
-        # Get the cursor's current line
         cursor_pos = self.editor.index(tk.INSERT)
         line_num = cursor_pos.split('.')[0]
         line_text = self.editor.get(f"{line_num}.0", cursor_pos)
         
-        # 1. Calculate existing indentation
         indent = ""
         for char in line_text:
-            if char in " \t":
-                indent += char
-            else:
-                break
+            if char in " \t": indent += char
+            else: break
                 
         stripped_line = line_text.strip()
         
-        # 2. Block Closing (Dedent): If the user hits enter on a line that is ONLY whitespace,
-        # we assume they want to leave the block. We remove 4 spaces of indent.
         if not stripped_line and indent:
             self.editor.delete(f"{line_num}.0", cursor_pos)
             new_indent = indent[:-4] if len(indent) >= 4 else ""
@@ -144,15 +137,11 @@ print("Hello from the EXE!")
             self.editor.see(tk.INSERT)
             return "break"
 
-        # 3. Block Opening (Indent): If the line ends with a colon, increase indentation by 4
         if stripped_line.endswith(":"):
             indent += "    "
             
-        # 4. Insert the newline plus the calculated indentation
         self.editor.insert(tk.INSERT, "\n" + indent)
         self.editor.see(tk.INSERT)
-        
-        # Return "break" to stop Tkinter from also inserting its own default newline
         return "break"
 
     def toggle_theme(self):
@@ -289,8 +278,7 @@ print("Hello from the EXE!")
     def _run_vm_thread(self, code):
         try:
             lexer = Lexer(code)
-            tokens = lexer.tokenize()
-            parser = Parser(tokens)
+            parser = Parser(lexer.tokenize())
             ast = parser.parse()
             
             compiler = Compiler()
@@ -301,18 +289,22 @@ print("Hello from the EXE!")
             
             self.output_queue.put(("finish", None))
         except Exception as e:
-            from pylite.errors import PyLiteError
-            if isinstance(e, PyLiteError):
-                err_msg = str(e)
-            else:
-                # Fallback formatter extracting line info if available
-                line = getattr(e, 'line', 1)
-                col = getattr(e, 'column', 1)
-                err_type = type(e).__name__
-                pylite_err = PyLiteError(err_type, str(e), line=line, column=col, filename=self.current_file or "main.py", source_code=code)
-                err_msg = str(pylite_err)
-                
-            self.output_queue.put(("error", err_msg))
+            # CLEAN ERROR FORMATTING
+            err_type = type(e).__name__
+            err_msg = str(e)
+            
+            # Extract line number from our compiler's syntax errors if present
+            line_match = re.search(r'at line (\d+)', err_msg)
+            line_str = f"Line: {line_match.group(1)}\n" if line_match else ""
+            
+            filename = os.path.basename(self.current_file) if self.current_file else "main.py"
+            
+            # Build the custom PyLite Error Block
+            clean_traceback = f"PyLite {err_type}\n\n"
+            clean_traceback += f"File: {filename}\n{line_str}\n"
+            clean_traceback += f"{err_type}: {err_msg}\n"
+            
+            self.output_queue.put(("error", clean_traceback))
             self.output_queue.put(("finish", None))
 
     def run(self):

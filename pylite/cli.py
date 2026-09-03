@@ -1,13 +1,18 @@
-import argparse
 import sys
+import os
+import re
 from pylite.lexer import Lexer
 from pylite.parser import Parser
 from pylite.compiler import Compiler
 from pylite.vm import VM
+from pylite.gui import PyLiteIDE
 
-def execute_code(source_code: str):
+def run_file(filepath):
     try:
-        lexer = Lexer(source_code)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            code = f.read()
+            
+        lexer = Lexer(code)
         parser = Parser(lexer.tokenize())
         ast = parser.parse()
         
@@ -16,31 +21,34 @@ def execute_code(source_code: str):
         
         vm = VM()
         vm.run(main_func)
+        
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        err_type = type(e).__name__
+        err_msg = str(e)
+        
+        line_match = re.search(r'at line (\d+)', err_msg)
+        line_str = f"Line: {line_match.group(1)}\n" if line_match else ""
+        
+        filename = os.path.basename(filepath)
+        
+        print(f"\nPyLite {err_type}")
+        print(f"File: {filename}")
+        if line_str: print(line_str.strip())
+        print(f"\n{err_type}: {err_msg}")
+        sys.exit(1)
 
 def main():
-    parser = argparse.ArgumentParser(description="PyLite Compiler and Runtime")
-    parser.add_argument("file", nargs="?", help="The .py file to execute")
-    parser.add_argument("--gui", action="store_true", help="Launch the Desktop IDE")
-    
-    args = parser.parse_args()
-    
-    if args.gui:
-        # We will build this file next!
-        from pylite.gui import PyLiteIDE
-        app = PyLiteIDE()
-        app.run()
-    elif args.file:
-        try:
-            with open(args.file, 'r') as f:
-                content = f.read()
-            execute_code(content)
-        except FileNotFoundError:
-            print(f"Error: File '{args.file}' not found.")
-            sys.exit(1)
+    if len(sys.argv) < 2 or sys.argv[1] in ("--help", "-h"):
+        print("Usage:")
+        print("  python -m pylite.cli <file.py>  # Run a file directly")
+        print("  python -m pylite.cli --gui      # Launch the IDE")
+        sys.exit(0)
+        
+    if sys.argv[1] == "--gui":
+        ide = PyLiteIDE()
+        ide.run()
     else:
-        parser.print_help()
+        run_file(sys.argv[1])
 
 if __name__ == "__main__":
     main()
