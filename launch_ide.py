@@ -1,6 +1,8 @@
-# launch_ide.py
-from pylite.gui import PyLiteIDE
+from pylite.cli import main
+import sys
 
 if __name__ == "__main__":
-    app = PyLiteIDE()
-    app.run()
+    # Force the GUI flag if launched directly as a desktop app
+    if len(sys.argv) == 1:
+        sys.argv.append("--gui")
+    main()

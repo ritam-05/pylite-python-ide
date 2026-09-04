@@ -271,16 +271,26 @@ class PyLiteIDE:
             if is_folder:
                 os.mkdir(full_path)
                 self.refresh_tree()
-                self.tree.item(parent_dir, open=True)
+                # FIXED: Check if the parent is a visible tree node before expanding
+                if self.tree.exists(parent_dir):
+                    self.tree.item(parent_dir, open=True)
             else:
-                with open(full_path, 'w', encoding='utf-8') as f: f.write("")
+                with open(full_path, 'w', encoding='utf-8') as f: f.write("# PyLite IDE\n")
                 self.refresh_tree()
-                self.tree.item(parent_dir, open=True)
-                self.tree.selection_set(full_path)
-                self.tree.focus(full_path)
+                
+                # FIXED: Check if the parent is a visible tree node before expanding
+                if self.tree.exists(parent_dir):
+                    self.tree.item(parent_dir, open=True)
+                
+                # Safely select and focus the new file
+                if self.tree.exists(full_path):
+                    self.tree.selection_set(full_path)
+                    self.tree.focus(full_path)
+                    
                 self._open_specific_file(full_path)
-        except Exception as e: messagebox.showerror("Error", str(e))
-
+        except Exception as e: 
+            messagebox.showerror("Error", str(e))
+            
     def _on_tree_right_click(self, event):
         if not self.workspace_path: return
         item = self.tree.identify_row(event.y)
