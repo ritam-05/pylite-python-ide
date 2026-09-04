@@ -3,6 +3,7 @@
 > A lightweight Python-inspired programming language, bytecode compiler, virtual machine, runtime, and desktop IDE built from scratch in Python.
 
 PyLite aims to provide a practical subset of Python focused on **DSA, algorithms, recursion, OOP, and general programming**, without attempting to replicate the entire Python ecosystem.
+Download the IDE from the 'releases' section.
 
 ## ✨ Features
 
